@@ -4,13 +4,25 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
+interface Transaction {
+  id?: string;
+  tanggal?: string;
+  keterangan?: string;
+  jenis?: string;
+  nominal?: number | string;
+  [key: string]: any;
+}
+
 export default function PublicPortal() {
   const router = useRouter();
   const [profil, setProfil] = useState<any>({});
-  const [kasList, setKasList] = useState<any[]>([]);
+  const [kasList, setKasList] = useState<Transaction[]>([]);
   const [inventarisList, setInventarisList] = useState<any[]>([]);
   const [kajianList, setKajianList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // State untuk Modal Edit Transaksi
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
   const loadPublicData = async () => {
     try {
@@ -20,7 +32,22 @@ export default function PublicPortal() {
           setProfil(data.profil[0]);
         }
         if (data.kas) {
-          setKasList(data.kas);
+          // Berikan format ID MBM-YYYYMM-XXX jika belum ada di data sheets
+          const formattedKas = data.kas.map((item: any, index: number) => {
+            if (item.id) return item;
+            
+            // Ambil tahun-bulan dari tanggal item, atau gunakan default bulan ini (202611)
+            const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
+            const [y, m] = dateStr.split("-");
+            const ym = y && m ? `${y}${m}` : "202611";
+            const paddedIdx = String(index + 1).padStart(3, "0");
+
+            return {
+              ...item,
+              id: `MBM-${ym}-${paddedIdx}`
+            };
+          });
+          setKasList(formattedKas);
         }
         if (data.inventaris) {
           setInventarisList(data.inventaris);
@@ -39,6 +66,15 @@ export default function PublicPortal() {
   useEffect(() => {
     loadPublicData();
   }, []);
+
+  // Simpan perubahan dari modal edit lokal
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTx) return;
+
+    setKasList(kasList.map((item) => (item.id === editingTx.id ? editingTx : item)));
+    setEditingTx(null); // Tutup modal
+  };
 
   // Hitung total saldo kas publik
   let totalMasuk = 0;
@@ -138,7 +174,7 @@ export default function PublicPortal() {
         {/* Grid Informasi Publik (Mutasi Kas, Kajian, & Kotak QRIS Donasi) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Tabel Transaksi Kas Terbaru (2 Kolom) */}
+          {/* Tabel Transaksi Kas Terbaru dengan Kolom ID (MBM-YYYYMM-XXX) & Tombol Edit */}
           <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
             <div className="flex justify-between items-center">
               <div>
@@ -154,15 +190,20 @@ export default function PublicPortal() {
               <table className="w-full text-left text-xs text-slate-600">
                 <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200">
                   <tr>
+                    <th className="p-3 whitespace-nowrap">ID Transaksi</th>
                     <th className="p-3 whitespace-nowrap">Tanggal</th>
                     <th className="p-3">Keterangan</th>
                     <th className="p-3 whitespace-nowrap">Jenis</th>
                     <th className="p-3 text-right whitespace-nowrap">Nominal (Rp)</th>
+                    <th className="p-3 text-center whitespace-nowrap">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {kasList.slice(0, 8).map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="p-3 whitespace-nowrap font-mono font-semibold text-emerald-700">
+                        {item.id || `MBM-202611-00${idx + 1}`}
+                      </td>
                       <td className="p-3 whitespace-nowrap font-medium text-slate-700">
                         {item.tanggal ? String(item.tanggal).split("T")[0] : "-"}
                       </td>
@@ -177,11 +218,19 @@ export default function PublicPortal() {
                       <td className="p-3 text-right font-bold text-slate-900 whitespace-nowrap">
                         Rp {Number(item.nominal || 0).toLocaleString("id-ID")}
                       </td>
+                      <td className="p-3 text-center whitespace-nowrap">
+                        <button
+                          onClick={() => setEditingTx(item)}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition shadow-sm"
+                        >
+                          Edit
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {kasList.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="p-8 text-center text-slate-400">
+                      <td colSpan={6} className="p-8 text-center text-slate-400">
                         Belum ada data kas yang tercatat di database.
                       </td>
                     </tr>
@@ -194,7 +243,7 @@ export default function PublicPortal() {
           {/* Sidebar Samping (QRIS Donasi, Jadwal Kajian, & Alamat) */}
           <div className="space-y-6">
             
-            {/* Kotak QRIS Donasi Publik (Menampilkan QRIS yang di-upload dari admin) */}
+            {/* Kotak QRIS Donasi Publik */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 text-center space-y-3">
               <h3 className="font-extrabold text-sm text-[#0b1c30]">💳 QRIS Donasi / Infak</h3>
               <p className="text-[11px] text-slate-500">Scan QRIS di bawah ini untuk menyalurkan infak atau donasi ke masjid secara nontunai.</p>
@@ -247,6 +296,80 @@ export default function PublicPortal() {
         </div>
 
       </div>
+
+      {/* MODAL EDIT TRANSAKSI */}
+      {editingTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200 text-slate-800">
+            <h3 className="text-lg font-bold text-[#0b1c30] mb-1">Edit Transaksi</h3>
+            <p className="text-xs text-slate-500 mb-4 font-mono">ID: {editingTx.id}</p>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Tanggal</label>
+                <input 
+                  type="date" 
+                  value={editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : ""}
+                  onChange={(e) => setEditingTx({...editingTx, tanggal: e.target.value})}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Keterangan Transaksi</label>
+                <input 
+                  type="text" 
+                  value={editingTx.keterangan || ""}
+                  onChange={(e) => setEditingTx({...editingTx, keterangan: e.target.value})}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Jenis</label>
+                  <select 
+                    value={editingTx.jenis || "Masuk"}
+                    onChange={(e) => setEditingTx({...editingTx, jenis: e.target.value})}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="Masuk">Masuk</option>
+                    <option value="Keluar">Keluar</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Nominal (Rp)</label>
+                  <input 
+                    type="number" 
+                    value={editingTx.nominal || 0}
+                    onChange={(e) => setEditingTx({...editingTx, nominal: Number(e.target.value)})}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                <button 
+                  type="button"
+                  onClick={() => setEditingTx(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md shadow-emerald-600/30"
+                >
+                  Simpan Perubahan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Footer Publik */}
       <footer className="mt-16 border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
