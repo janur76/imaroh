@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --color-emerald-DEFAULT: #047857;
+  --color-emerald-dark: #064e3b;
+  --color-emerald-light: #b0f0d6;
+  --color-emerald-surface: #f8f9ff;
+}
+
+body {
+  background-color: #f8f9ff;
+  color: #0b1c30;
+  font-family: 'Inter', 'Plus Jakarta Sans', sans-serif;
+}

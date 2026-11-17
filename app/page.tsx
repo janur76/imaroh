@@ -1,0 +1,258 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { fetchImarohData } from "@/lib/api";
+
+export default function PublicPortal() {
+  const router = useRouter();
+  const [profil, setProfil] = useState<any>({});
+  const [kasList, setKasList] = useState<any[]>([]);
+  const [inventarisList, setInventarisList] = useState<any[]>([]);
+  const [kajianList, setKajianList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadPublicData = async () => {
+    try {
+      const data = await fetchImarohData("all");
+      if (data) {
+        if (data.profil && data.profil.length > 0) {
+          setProfil(data.profil[0]);
+        }
+        if (data.kas) {
+          setKasList(data.kas);
+        }
+        if (data.inventaris) {
+          setInventarisList(data.inventaris);
+        }
+        if (data.kajian) {
+          setKajianList(data.kajian);
+        }
+      }
+    } catch (error) {
+      console.error("Gagal memuat data portal:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPublicData();
+  }, []);
+
+  // Hitung total saldo kas publik
+  let totalMasuk = 0;
+  let totalKeluar = 0;
+  kasList.forEach((item) => {
+    const nom = Number(item.nominal || 0);
+    const jns = String(item.jenis || "").toLowerCase();
+    if (jns.includes("masuk")) totalMasuk += nom;
+    if (jns.includes("keluar")) totalKeluar += nom;
+  });
+  const saldoBersih = totalMasuk - totalKeluar;
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-[#f0fdf4] via-[#f8f9ff] to-[#f0fdf4] text-[#0b1c30]">
+      
+      {/* Top Navbar / Header Publik dengan Logo Masjid Transparan */}
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-emerald-100 px-4 md:px-8 py-4 shadow-sm">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          
+          {/* Identitas Masjid & Slot Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center p-1 shadow-inner overflow-hidden">
+              {profil.logo_url ? (
+                <img 
+                  src={profil.logo_url} 
+                  alt="Logo Masjid" 
+                  className="w-full h-full object-contain" 
+                />
+              ) : (
+                <span className="text-xl">🕌</span>
+              )}
+            </div>
+            <div>
+              <span className="text-[10px] font-bold tracking-widest text-[#047857] uppercase bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                Portal Resmi Masjid Digital
+              </span>
+              <h1 className="text-lg md:text-xl font-extrabold text-[#0b1c30] mt-0.5">
+                {profil.nama_masjid || "Masjid Baitul Mu'minin"}
+              </h1>
+            </div>
+          </div>
+
+          {/* Tombol Akses Login Admin DKM */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/admin/login")}
+              className="px-4 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#047857] border border-emerald-200 text-xs font-bold transition duration-200 shadow-sm flex items-center gap-1.5"
+            >
+              🔐 Login Takmir / Admin
+            </button>
+          </div>
+
+        </div>
+      </header>
+
+      {/* Running Text Pengumuman */}
+      {profil.running_text && (
+        <div className="bg-[#064e3b] text-emerald-50 text-xs py-2.5 px-4 overflow-hidden whitespace-nowrap shadow-inner">
+          <div className="inline-block animate-marquee font-medium">
+            📢 {profil.running_text} &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp; 📍 {profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo"}
+          </div>
+        </div>
+      )}
+
+      {/* Hero Section / Ringkasan Saldo Transparan */}
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-8">
+        
+        <div className="bg-gradient-to-br from-[#064e3b] via-[#047857] to-[#022c22] text-white p-8 md:p-10 rounded-3xl shadow-xl relative overflow-hidden">
+          <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+            <div className="md:col-span-2 space-y-3">
+              <span className="text-xs uppercase tracking-widest font-semibold text-emerald-200 bg-white/10 px-3 py-1 rounded-full border border-white/10">
+                Transparansi Keuangan Umat
+              </span>
+              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+                Akuntabilitas & Keterbukaan Kas Masjid
+              </h2>
+              <p className="text-sm text-emerald-100/90 max-w-xl">
+                Seluruh catatan infak, donasi jamaah, dan alokasi belanja operasional dikelola secara transparan dan dapat dipantau langsung oleh masyarakat secara *real-time*.
+              </p>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-md p-6 rounded-2xl border border-white/20 text-center shadow-lg">
+              <span className="text-xs text-emerald-200 font-semibold uppercase tracking-wider">Saldo Kas Bersih Saat Ini</span>
+              <h3 className="text-3xl md:text-4xl font-black mt-2 text-white">
+                Rp {saldoBersih.toLocaleString("id-ID")}
+              </h3>
+              <div className="mt-3 pt-3 border-t border-white/10 flex justify-between text-xs text-emerald-100">
+                <span>Masuk: Rp {totalMasuk.toLocaleString("id-ID")}</span>
+                <span>Keluar: Rp {totalKeluar.toLocaleString("id-ID")}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Grid Informasi Publik (Mutasi Kas, Kajian, & Kotak QRIS Donasi) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Tabel Transaksi Kas Terbaru (2 Kolom) */}
+          <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-extrabold text-lg text-[#0b1c30]">Mutasi Kas Terbaru</h3>
+                <p className="text-xs text-slate-500">Daftar transaksi kas masuk dan keluar masjid.</p>
+              </div>
+              <span className="text-xs font-semibold text-[#047857] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                {kasList.length} Transaksi Tercatat
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="p-3 whitespace-nowrap">Tanggal</th>
+                    <th className="p-3">Keterangan</th>
+                    <th className="p-3 whitespace-nowrap">Jenis</th>
+                    <th className="p-3 text-right whitespace-nowrap">Nominal (Rp)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {kasList.slice(0, 8).map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="p-3 whitespace-nowrap font-medium text-slate-700">
+                        {item.tanggal ? String(item.tanggal).split("T")[0] : "-"}
+                      </td>
+                      <td className="p-3 font-semibold text-slate-900">{item.keterangan || "-"}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        <span className={`px-2.5 py-1 rounded-full font-semibold text-[10px] ${
+                          String(item.jenis).toLowerCase().includes("masuk") ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                        }`}>
+                          {item.jenis || "Masuk"}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                        Rp {Number(item.nominal || 0).toLocaleString("id-ID")}
+                      </td>
+                    </tr>
+                  ))}
+                  {kasList.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-slate-400">
+                        Belum ada data kas yang tercatat di database.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Sidebar Samping (QRIS Donasi, Jadwal Kajian, & Alamat) */}
+          <div className="space-y-6">
+            
+            {/* Kotak QRIS Donasi Publik (Menampilkan QRIS yang di-upload dari admin) */}
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 text-center space-y-3">
+              <h3 className="font-extrabold text-sm text-[#0b1c30]">💳 QRIS Donasi / Infak</h3>
+              <p className="text-[11px] text-slate-500">Scan QRIS di bawah ini untuk menyalurkan infak atau donasi ke masjid secara nontunai.</p>
+              
+              <div className="w-48 h-48 mx-auto bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center p-2 overflow-hidden shadow-inner">
+                {profil.qris_url ? (
+                  <img src={profil.qris_url} alt="QRIS Donasi Masjid" className="w-full h-full object-contain" />
+                ) : (
+                  <div className="text-xs text-slate-400 p-4">
+                    QRIS belum diatur oleh admin di menu Profil.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Jadwal Kajian Terdekat */}
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
+              <h3 className="font-extrabold text-base text-[#0b1c30] flex items-center gap-2">
+                <span>📅</span> Agenda & Jadwal Kajian
+              </h3>
+              <div className="space-y-3">
+                {kajianList.slice(0, 3).map((kajian, idx) => (
+                  <div key={idx} className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-1.5">
+                    <span className="text-[10px] font-bold text-[#047857] uppercase bg-emerald-100/60 px-2.5 py-0.5 rounded-md">
+                      {kajian.tanggal || "Segera"} • {kajian.waktu || "Ba'da Isya"}
+                    </span>
+                    <h4 className="font-bold text-xs text-slate-900 mt-1">{kajian.tema || "Kajian Rutin"}</h4>
+                    <p className="text-[11px] text-slate-600">Pemateri: <span className="font-semibold">{kajian.pemateri || "Ustadz"}</span></p>
+                  </div>
+                ))}
+                {kajianList.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-4">Belum ada jadwal kajian.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Info Kontak & Alamat */}
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-3xl shadow-sm space-y-3">
+              <h3 className="font-extrabold text-sm text-emerald-400">📍 Lokasi & Sekretariat</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo, Jawa Timur"}
+              </p>
+              <div className="pt-2 border-t border-slate-700 text-[11px] text-slate-400 flex justify-between">
+                <span>Telp / WA: {profil.telepon || "-"}</span>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* Footer Publik */}
+      <footer className="mt-16 border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
+        <p>© 2026 {profil.nama_masjid || "Masjid Baitul Mu'minin"} • Powered by Imaroh SaaS (Kalibu ID)</p>
+      </footer>
+
+    </main>
+  );
+}
