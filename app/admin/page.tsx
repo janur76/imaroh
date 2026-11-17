@@ -4,17 +4,29 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
+interface Transaction {
+  id_transaksi?: string;
+  tanggal?: string;
+  keterangan?: string;
+  jenis?: string;
+  nominal?: number | string;
+  [key: string]: any;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [jenis, setJenis] = useState("masuk");
   const [nominal, setNominal] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [loading, setLoading] = useState(false);
-  const [transaksiList, setTransaksiList] = useState<any[]>([]);
+  const [transaksiList, setTransaksiList] = useState<Transaction[]>([]);
   
   // State untuk Filter & Pencarian
   const [filterBulan, setFilterBulan] = useState("semua");
   const [filterJenis, setFilterJenis] = useState("semua");
+
+  // State untuk Modal Edit Transaksi
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
   const [kpi, setKpi] = useState({
     saldoAkhir: 0,
@@ -25,18 +37,37 @@ export default function AdminDashboard() {
   const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
   const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/1v4ckXNCDzC749ecoLLaaAch4Fbfw7bWr6tirfYgYMfw/edit?gid=501383615#gid=501383615";
 
-  // Fungsi untuk memuat data transaksi dari Sheets & menghitung KPI dinamis
+  // Fungsi untuk memuat data transaksi dari Sheets & menyelaraskan ID berformat MBM-YYYYMM-XXX
   const loadDataKas = async () => {
     try {
       const result = await fetchImarohData("all");
       if (result && result.kas) {
-        const dataKas = [...result.kas].reverse();
-        setTransaksiList(dataKas);
+        const rawData = [...result.kas].reverse();
+        
+        // Format ID Transaksi menjadi MBM-YYYYMM-XXX agar 100% sinkron dengan halaman depan
+        const formattedData = rawData.map((item: any, index: number) => {
+          const currentId = item.id_transaksi || item.id;
+          if (currentId && String(currentId).startsWith("MBM-")) {
+            return { ...item, id_transaksi: currentId };
+          }
+          
+          const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
+          const [y, m] = dateStr.split("-");
+          const ym = y && m ? `${y}${m}` : "202611";
+          const paddedIdx = String(rawData.length - index).padStart(3, "0");
+
+          return {
+            ...item,
+            id_transaksi: `MBM-${ym}-${paddedIdx}`
+          };
+        });
+
+        setTransaksiList(formattedData);
 
         let totalMasuk = 0;
         let totalKeluar = 0;
 
-        dataKas.forEach((item: any) => {
+        formattedData.forEach((item: any) => {
           const nominalVal = Number(item.nominal || 0);
           const jenisStr = String(item.jenis || "").toLowerCase();
           
@@ -103,16 +134,24 @@ export default function AdminDashboard() {
     }
   };
 
+  // Simpan perubahan dari modal edit lokal admin
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTx) return;
+
+    setTransaksiList(transaksiList.map((item) => (item.id_transaksi === editingTx.id_transaksi ? editingTx : item)));
+    setEditingTx(null); // Tutup modal
+    alert("Perubahan transaksi berhasil disimpan secara lokal. (Sinkronkan ke Google Sheets sesuai konfigurasi backend Anda)");
+  };
+
   // Logika Filter Data Transaksi
   const filteredTransaksi = transaksiList.filter((item) => {
     const tanggalItem = item.tanggal ? String(item.tanggal).split("T")[0] : "";
     const bulanItem = tanggalItem.slice(0, 7); // Format: "YYYY-MM"
     const jenisItem = String(item.jenis || "").toLowerCase();
 
-    // Filter Bulan
     const matchBulan = filterBulan === "semua" || bulanItem === filterBulan;
 
-    // Filter Jenis (Masuk / Keluar)
     let matchJenis = true;
     if (filterJenis === "masuk") {
       matchJenis = jenisItem.includes("masuk");
@@ -123,10 +162,8 @@ export default function AdminDashboard() {
     return matchBulan && matchJenis;
   });
 
-  // Hitung Total Nominal dari hasil filter
   const totalNominalFilter = filteredTransaksi.reduce((acc, item) => acc + Number(item.nominal || 0), 0);
 
-  // Daftar opsi bulan unik dari data yang ada untuk dropdown filter
   const daftarBulanUnik = Array.from(
     new Set(
       transaksiList
@@ -135,10 +172,9 @@ export default function AdminDashboard() {
     )
   ).sort().reverse();
 
-  // Fungsi Cetak Laporan / Print Preview dengan Nama File Dinamis (MBM - Tanggal & Jam Unik)
   const handleCetakLaporan = () => {
     const now = new Date();
-    const tgl = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const tgl = now.toISOString().split("T")[0];
     const jam = String(now.getHours()).padStart(2, '0');
     const menit = String(now.getMinutes()).padStart(2, '0');
     const detik = String(now.getSeconds()).padStart(2, '0');
@@ -147,7 +183,6 @@ export default function AdminDashboard() {
     const judulOriginal = document.title;
     
     document.title = `MBM-${timestampUnik}`;
-    
     window.print();
     
     setTimeout(() => {
@@ -155,7 +190,6 @@ export default function AdminDashboard() {
     }, 1000);
   };
 
-  // Teks Label Filter Jenis untuk Header Cetak
   const getLabelJenisFilter = () => {
     if (filterJenis === "masuk") return "Kas Masuk (Pemasukan)";
     if (filterJenis === "keluar") return "Kas Keluar (Pengeluaran)";
@@ -164,18 +198,15 @@ export default function AdminDashboard() {
 
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
-      {/* CSS Khusus untuk Mode Cetak (Print Stylesheet) */}
       <style jsx global>{`
         @media print {
           body {
             background-color: white !important;
             color: black !important;
           }
-          /* Sembunyikan elemen navigasi, form input, dan tombol saat dicetak */
           .no-print {
             display: none !important;
           }
-          /* Pastikan card dan tabel tampil optimal di kertas */
           .print-container {
             box-shadow: none !important;
             border: none !important;
@@ -187,7 +218,7 @@ export default function AdminDashboard() {
 
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Top Bar Admin dengan Navigasi Lengkap Antar Modul & Tombol Sheets (Disembunyikan saat Print) */}
+        {/* Top Bar Admin */}
         <div className="no-print bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <span className="text-xs uppercase tracking-wider font-semibold text-[#047857] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
@@ -201,7 +232,6 @@ export default function AdminDashboard() {
             </p>
           </div>
           
-          {/* Tombol Navigasi Cepat Antar Modul & Google Sheets */}
           <div className="flex flex-wrap items-center gap-2">
             <a
               href={GOOGLE_SHEETS_URL}
@@ -238,7 +268,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Header Khusus Saat Dicetak (Menampilkan Periode & Filter Kategori Secara Jelas) */}
+        {/* Header Cetak */}
         <div className="hidden print:block text-center space-y-1 mb-6">
           <h1 className="text-xl font-extrabold text-black uppercase">LAPORAN KEUANGAN KAS MASJID BAITUL MU'MININ</h1>
           <p className="text-xs text-slate-700">Perum Citra Mandiri Regency, Sidoarjo</p>
@@ -249,7 +279,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* KPI Cards Row (Keuangan) */}
+        {/* KPI Cards */}
         <div className="no-print grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-gradient-to-br from-[#064e3b] to-[#003527] text-white p-6 rounded-2xl shadow-md">
             <span className="text-xs text-[#b0f0d6] uppercase tracking-wider font-semibold">Total Saldo Kas</span>
@@ -268,10 +298,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Form & Status Grid (Disembunyikan saat Print) */}
+        {/* Form & Status Grid */}
         <div className="no-print grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          {/* Card Form Input Kas */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="font-bold text-lg text-[#0b1c30] mb-4">Catat Transaksi Kas Baru</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -321,7 +349,6 @@ export default function AdminDashboard() {
             </form>
           </div>
 
-          {/* Card Status Koneksi Database */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
             <div>
               <h2 className="font-bold text-lg text-[#0b1c30]">Status Koneksi Database</h2>
@@ -350,10 +377,9 @@ export default function AdminDashboard() {
               </button>
             </div>
           </div>
-
         </div>
 
-        {/* Tabel Riwayat Mutasi Kas dengan Filter, Summary, & Tombol Cetak Laporan */}
+        {/* Tabel Riwayat Mutasi Kas (DENGAN TOMBOL EDIT EKSKLUSIF DI ADMIN) */}
         <div className="print-container bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -361,7 +387,6 @@ export default function AdminDashboard() {
               <p className="text-xs text-slate-500">Filter transaksi berdasarkan bulan dan jenis pengeluaran/pemasukan.</p>
             </div>
             
-            {/* Filter Kontrol & Tombol Cetak (Filter disembunyikan saat print) */}
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               <div className="no-print">
                 <select
@@ -390,7 +415,6 @@ export default function AdminDashboard() {
                 </select>
               </div>
 
-              {/* Tombol Cetak Laporan */}
               <button
                 onClick={handleCetakLaporan}
                 className="px-4 py-2 rounded-xl bg-[#047857] hover:bg-[#064e3b] text-white text-xs font-semibold transition duration-200 shadow-sm flex items-center gap-1.5"
@@ -400,7 +424,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Banner Ringkasan Hasil Filter */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row justify-between items-center text-xs gap-2">
             <span className="text-slate-600 font-medium">
               Menampilkan <strong className="text-slate-900">{filteredTransaksi.length}</strong> catatan transaksi dari filter aktif.
@@ -410,7 +433,6 @@ export default function AdminDashboard() {
             </span>
           </div>
 
-          {/* Tabel Data (Dengan penambahan whitespace-nowrap agar teks tidak turun/numpuk) */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200">
@@ -420,13 +442,14 @@ export default function AdminDashboard() {
                   <th className="p-3">Keterangan</th>
                   <th className="p-3 whitespace-nowrap">Jenis</th>
                   <th className="p-3 text-right whitespace-nowrap">Nominal (Rp)</th>
+                  <th className="p-3 text-center whitespace-nowrap no-print">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredTransaksi.length > 0 ? (
                   filteredTransaksi.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
-                      <td className="p-3 font-mono font-semibold text-slate-700 whitespace-nowrap">{item.id_transaksi || "-"}</td>
+                      <td className="p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">{item.id_transaksi || "-"}</td>
                       <td className="p-3 whitespace-nowrap">{item.tanggal ? String(item.tanggal).split("T")[0] : "-"}</td>
                       <td className="p-3 font-medium text-slate-800">{item.keterangan || "-"}</td>
                       <td className="p-3 whitespace-nowrap">
@@ -439,11 +462,19 @@ export default function AdminDashboard() {
                       <td className="p-3 text-right font-bold text-slate-800 whitespace-nowrap">
                         Rp {Number(item.nominal || 0).toLocaleString("id-ID")}
                       </td>
+                      <td className="p-3 text-center whitespace-nowrap no-print">
+                        <button
+                          onClick={() => setEditingTx(item)}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition shadow-sm"
+                        >
+                          Edit
+                        </button>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-400">
+                    <td colSpan={6} className="p-8 text-center text-slate-400">
                       Tidak ada data transaksi yang cocok dengan filter yang dipilih.
                     </td>
                   </tr>
@@ -454,6 +485,80 @@ export default function AdminDashboard() {
         </div>
 
       </div>
+
+      {/* MODAL EDIT TRANSAKSI KHUSUS ADMIN */}
+      {editingTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200 text-slate-800">
+            <h3 className="text-lg font-bold text-[#0b1c30] mb-1">Edit Transaksi</h3>
+            <p className="text-xs text-slate-500 mb-4 font-mono">ID: {editingTx.id_transaksi}</p>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Tanggal</label>
+                <input 
+                  type="date" 
+                  value={editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : ""}
+                  onChange={(e) => setEditingTx({...editingTx, tanggal: e.target.value})}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Keterangan Transaksi</label>
+                <input 
+                  type="text" 
+                  value={editingTx.keterangan || ""}
+                  onChange={(e) => setEditingTx({...editingTx, keterangan: e.target.value})}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Jenis</label>
+                  <select 
+                    value={editingTx.jenis || "masuk"}
+                    onChange={(e) => setEditingTx({...editingTx, jenis: e.target.value})}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="masuk">Masuk</option>
+                    <option value="keluar">Keluar</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Nominal (Rp)</label>
+                  <input 
+                    type="number" 
+                    value={editingTx.nominal || 0}
+                    onChange={(e) => setEditingTx({...editingTx, nominal: Number(e.target.value)})}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                <button 
+                  type="button"
+                  onClick={() => setEditingTx(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md shadow-emerald-600/30"
+                >
+                  Simpan Perubahan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

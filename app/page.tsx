@@ -4,25 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
-interface Transaction {
-  id?: string;
-  tanggal?: string;
-  keterangan?: string;
-  jenis?: string;
-  nominal?: number | string;
-  [key: string]: any;
-}
-
 export default function PublicPortal() {
   const router = useRouter();
   const [profil, setProfil] = useState<any>({});
-  const [kasList, setKasList] = useState<Transaction[]>([]);
+  const [kasList, setKasList] = useState<any[]>([]);
   const [inventarisList, setInventarisList] = useState<any[]>([]);
   const [kajianList, setKajianList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // State untuk Modal Edit Transaksi
-  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
   const loadPublicData = async () => {
     try {
@@ -32,11 +20,9 @@ export default function PublicPortal() {
           setProfil(data.profil[0]);
         }
         if (data.kas) {
-          // Berikan format ID MBM-YYYYMM-XXX jika belum ada di data sheets
           const formattedKas = data.kas.map((item: any, index: number) => {
-            if (item.id) return item;
+            if (item.id && String(item.id).startsWith("MBM-")) return item;
             
-            // Ambil tahun-bulan dari tanggal item, atau gunakan default bulan ini (202611)
             const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
             const [y, m] = dateStr.split("-");
             const ym = y && m ? `${y}${m}` : "202611";
@@ -67,16 +53,6 @@ export default function PublicPortal() {
     loadPublicData();
   }, []);
 
-  // Simpan perubahan dari modal edit lokal
-  const handleSaveEdit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingTx) return;
-
-    setKasList(kasList.map((item) => (item.id === editingTx.id ? editingTx : item)));
-    setEditingTx(null); // Tutup modal
-  };
-
-  // Hitung total saldo kas publik
   let totalMasuk = 0;
   let totalKeluar = 0;
   kasList.forEach((item) => {
@@ -90,19 +66,13 @@ export default function PublicPortal() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f0fdf4] via-[#f8f9ff] to-[#f0fdf4] text-[#0b1c30]">
       
-      {/* Top Navbar / Header Publik dengan Logo Masjid Transparan */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-emerald-100 px-4 md:px-8 py-4 shadow-sm">
+      {/* Top Navbar Publik */}
+      <header className="sticky top-0 z-50 bg-white/85 backdrop-blur-md border-b border-emerald-100 px-4 md:px-8 py-4 shadow-sm">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          
-          {/* Identitas Masjid & Slot Logo */}
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center p-1 shadow-inner overflow-hidden">
               {profil.logo_url ? (
-                <img 
-                  src={profil.logo_url} 
-                  alt="Logo Masjid" 
-                  className="w-full h-full object-contain" 
-                />
+                <img src={profil.logo_url} alt="Logo Masjid" className="w-full h-full object-contain" />
               ) : (
                 <span className="text-xl">🕌</span>
               )}
@@ -117,7 +87,6 @@ export default function PublicPortal() {
             </div>
           </div>
 
-          {/* Tombol Akses Login Admin DKM */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/admin/login")}
@@ -126,11 +95,10 @@ export default function PublicPortal() {
               🔐 Login Takmir / Admin
             </button>
           </div>
-
         </div>
       </header>
 
-      {/* Running Text Pengumuman */}
+      {/* Running Text */}
       {profil.running_text && (
         <div className="bg-[#064e3b] text-emerald-50 text-xs py-2.5 px-4 overflow-hidden whitespace-nowrap shadow-inner">
           <div className="inline-block animate-marquee font-medium">
@@ -139,9 +107,8 @@ export default function PublicPortal() {
         </div>
       )}
 
-      {/* Hero Section / Ringkasan Saldo Transparan */}
+      {/* Hero Section & Ringkasan Saldo */}
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-8">
-        
         <div className="bg-gradient-to-br from-[#064e3b] via-[#047857] to-[#022c22] text-white p-8 md:p-10 rounded-3xl shadow-xl relative overflow-hidden">
           <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
           
@@ -171,10 +138,8 @@ export default function PublicPortal() {
           </div>
         </div>
 
-        {/* Grid Informasi Publik (Mutasi Kas, Kajian, & Kotak QRIS Donasi) */}
+        {/* Tabel Mutasi Kas Publik (Tanpa Tombol Edit) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Tabel Transaksi Kas Terbaru dengan Kolom ID (MBM-YYYYMM-XXX) & Tombol Edit */}
           <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
             <div className="flex justify-between items-center">
               <div>
@@ -195,11 +160,10 @@ export default function PublicPortal() {
                     <th className="p-3">Keterangan</th>
                     <th className="p-3 whitespace-nowrap">Jenis</th>
                     <th className="p-3 text-right whitespace-nowrap">Nominal (Rp)</th>
-                    <th className="p-3 text-center whitespace-nowrap">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {kasList.slice(0, 8).map((item, idx) => (
+                  {kasList.slice(0, 10).map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
                       <td className="p-3 whitespace-nowrap font-mono font-semibold text-emerald-700">
                         {item.id || `MBM-202611-00${idx + 1}`}
@@ -218,20 +182,12 @@ export default function PublicPortal() {
                       <td className="p-3 text-right font-bold text-slate-900 whitespace-nowrap">
                         Rp {Number(item.nominal || 0).toLocaleString("id-ID")}
                       </td>
-                      <td className="p-3 text-center whitespace-nowrap">
-                        <button
-                          onClick={() => setEditingTx(item)}
-                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition shadow-sm"
-                        >
-                          Edit
-                        </button>
-                      </td>
                     </tr>
                   ))}
                   {kasList.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-400">
-                        Belum ada data kas yang tercatat di database.
+                      <td colSpan={5} className="p-8 text-center text-slate-400">
+                        Belum ada data kas yang tercatat.
                       </td>
                     </tr>
                   )}
@@ -240,26 +196,21 @@ export default function PublicPortal() {
             </div>
           </div>
 
-          {/* Sidebar Samping (QRIS Donasi, Jadwal Kajian, & Alamat) */}
+          {/* Sidebar Samping (QRIS & Kajian) */}
           <div className="space-y-6">
-            
-            {/* Kotak QRIS Donasi Publik */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 text-center space-y-3">
               <h3 className="font-extrabold text-sm text-[#0b1c30]">💳 QRIS Donasi / Infak</h3>
-              <p className="text-[11px] text-slate-500">Scan QRIS di bawah ini untuk menyalurkan infak atau donasi ke masjid secara nontunai.</p>
+              <p className="text-[11px] text-slate-500">Scan QRIS di bawah ini untuk menyalurkan infak secara nontunai.</p>
               
               <div className="w-48 h-48 mx-auto bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center p-2 overflow-hidden shadow-inner">
                 {profil.qris_url ? (
-                  <img src={profil.qris_url} alt="QRIS Donasi Masjid" className="w-full h-full object-contain" />
+                  <img src={profil.qris_url} alt="QRIS Donasi" className="w-full h-full object-contain" />
                 ) : (
-                  <div className="text-xs text-slate-400 p-4">
-                    QRIS belum diatur oleh admin di menu Profil.
-                  </div>
+                  <div className="text-xs text-slate-400 p-4">QRIS belum diatur admin.</div>
                 )}
               </div>
             </div>
 
-            {/* Jadwal Kajian Terdekat */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
               <h3 className="font-extrabold text-base text-[#0b1c30] flex items-center gap-2">
                 <span>📅</span> Agenda & Jadwal Kajian
@@ -274,108 +225,15 @@ export default function PublicPortal() {
                     <p className="text-[11px] text-slate-600">Pemateri: <span className="font-semibold">{kajian.pemateri || "Ustadz"}</span></p>
                   </div>
                 ))}
-                {kajianList.length === 0 && (
-                  <p className="text-xs text-slate-400 text-center py-4">Belum ada jadwal kajian.</p>
-                )}
               </div>
             </div>
-
-            {/* Info Kontak & Alamat */}
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-3xl shadow-sm space-y-3">
-              <h3 className="font-extrabold text-sm text-emerald-400">📍 Lokasi & Sekretariat</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo, Jawa Timur"}
-              </p>
-              <div className="pt-2 border-t border-slate-700 text-[11px] text-slate-400 flex justify-between">
-                <span>Telp / WA: {profil.telepon || "-"}</span>
-              </div>
-            </div>
-
           </div>
-
         </div>
-
       </div>
 
-      {/* MODAL EDIT TRANSAKSI */}
-      {editingTx && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200 text-slate-800">
-            <h3 className="text-lg font-bold text-[#0b1c30] mb-1">Edit Transaksi</h3>
-            <p className="text-xs text-slate-500 mb-4 font-mono">ID: {editingTx.id}</p>
-
-            <form onSubmit={handleSaveEdit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Tanggal</label>
-                <input 
-                  type="date" 
-                  value={editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : ""}
-                  onChange={(e) => setEditingTx({...editingTx, tanggal: e.target.value})}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Keterangan Transaksi</label>
-                <input 
-                  type="text" 
-                  value={editingTx.keterangan || ""}
-                  onChange={(e) => setEditingTx({...editingTx, keterangan: e.target.value})}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Jenis</label>
-                  <select 
-                    value={editingTx.jenis || "Masuk"}
-                    onChange={(e) => setEditingTx({...editingTx, jenis: e.target.value})}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  >
-                    <option value="Masuk">Masuk</option>
-                    <option value="Keluar">Keluar</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Nominal (Rp)</label>
-                  <input 
-                    type="number" 
-                    value={editingTx.nominal || 0}
-                    onChange={(e) => setEditingTx({...editingTx, nominal: Number(e.target.value)})}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-                <button 
-                  type="button"
-                  onClick={() => setEditingTx(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
-                >
-                  Batal
-                </button>
-                <button 
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md shadow-emerald-600/30"
-                >
-                  Simpan Perubahan
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Footer Publik */}
       <footer className="mt-16 border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
         <p>© 2026 {profil.nama_masjid || "Masjid Baitul Mu'minin"} • Powered by Imaroh SaaS (Kalibu ID)</p>
       </footer>
-
     </main>
   );
 }
