@@ -20,17 +20,22 @@ export default function PublicPortal() {
           setProfil(data.profil[0]);
         }
         if (data.kas) {
-          const formattedKas = data.kas.map((item: any, index: number) => {
-            if (item.id && String(item.id).startsWith("MBM-")) return item;
+          // Urutkan dan format ID MBM-YYYYMM-XXX secara konsisten
+          const rawKas = [...data.kas].reverse();
+          const formattedKas = rawKas.map((item: any, index: number) => {
+            const currentId = item.id_transaksi || item.id;
+            if (currentId && String(currentId).startsWith("MBM-")) {
+              return { ...item, id_transaksi: currentId };
+            }
             
             const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
             const [y, m] = dateStr.split("-");
             const ym = y && m ? `${y}${m}` : "202611";
-            const paddedIdx = String(index + 1).padStart(3, "0");
+            const paddedIdx = String(rawKas.length - index).padStart(3, "0");
 
             return {
               ...item,
-              id: `MBM-${ym}-${paddedIdx}`
+              id_transaksi: `MBM-${ym}-${paddedIdx}`
             };
           });
           setKasList(formattedKas);
@@ -138,7 +143,7 @@ export default function PublicPortal() {
           </div>
         </div>
 
-        {/* Tabel Mutasi Kas Publik (Tanpa Tombol Edit) */}
+        {/* Tabel Mutasi Kas Publik (Menampilkan Seluruh Transaksi Terbaru Tanpa Terpotong) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
             <div className="flex justify-between items-center">
@@ -163,10 +168,10 @@ export default function PublicPortal() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {kasList.slice(0, 10).map((item, idx) => (
+                  {kasList.slice(0, 20).map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
                       <td className="p-3 whitespace-nowrap font-mono font-semibold text-emerald-700">
-                        {item.id || `MBM-202611-00${idx + 1}`}
+                        {item.id_transaksi || `MBM-202611-00${idx + 1}`}
                       </td>
                       <td className="p-3 whitespace-nowrap font-medium text-slate-700">
                         {item.tanggal ? String(item.tanggal).split("T")[0] : "-"}
