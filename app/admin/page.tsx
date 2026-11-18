@@ -19,6 +19,7 @@ export default function AdminDashboard() {
   const [nominal, setNominal] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [loading, setLoading] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [transaksiList, setTransaksiList] = useState<Transaction[]>([]);
   
   // State untuk Filter & Pencarian
@@ -134,14 +135,44 @@ export default function AdminDashboard() {
     }
   };
 
-  // Simpan perubahan dari modal edit lokal admin
-  const handleSaveEdit = (e: React.FormEvent) => {
+  // Simpan perubahan edit secara permanen ke Google Sheets lewat Apps Script
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTx) return;
 
-    setTransaksiList(transaksiList.map((item) => (item.id_transaksi === editingTx.id_transaksi ? editingTx : item)));
-    setEditingTx(null); // Tutup modal
-    alert("Perubahan transaksi berhasil disimpan secara lokal. (Sinkronkan ke Google Sheets sesuai konfigurasi backend Anda)");
+    setSavingEdit(true);
+    try {
+      const payload = {
+        action: "editKas", // Pastikan backend Apps Script menangani action ini untuk update berdasarkan id_transaksi
+        id_transaksi: editingTx.id_transaksi,
+        tanggal: editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : "",
+        keterangan: editingTx.keterangan,
+        jenis: editingTx.jenis,
+        nominal: Number(editingTx.nominal),
+      };
+
+      await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      alert("Perubahan transaksi berhasil disimpan secara permanen ke Google Sheets!");
+      setEditingTx(null); // Tutup modal
+      
+      // Sinkronkan ulang data setelah beberapa detik
+      setTimeout(() => {
+        loadDataKas();
+      }, 1500);
+    } catch (error) {
+      console.error("Gagal memperbarui transaksi:", error);
+      alert("Terjadi kesalahan saat memperbarui data ke database.");
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   // Logika Filter Data Transaksi
@@ -379,7 +410,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Tabel Riwayat Mutasi Kas (DENGAN TOMBOL EDIT EKSKLUSIF DI ADMIN) */}
+        {/* Tabel Riwayat Mutasi Kas */}
         <div className="print-container bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -486,7 +517,7 @@ export default function AdminDashboard() {
 
       </div>
 
-      {/* MODAL EDIT TRANSAKSI KHUSUS ADMIN */}
+      {/* MODAL EDIT TRANSAKSI KE GOOGLE SHEETS */}
       {editingTx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200 text-slate-800">
@@ -550,9 +581,10 @@ export default function AdminDashboard() {
                 </button>
                 <button 
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md shadow-emerald-600/30"
+                  disabled={savingEdit}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md shadow-emerald-600/30 disabled:opacity-50"
                 >
-                  Simpan Perubahan
+                  {savingEdit ? "Menyimpan..." : "Simpan Perubahan"}
                 </button>
               </div>
             </form>
