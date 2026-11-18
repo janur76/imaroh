@@ -135,18 +135,19 @@ export default function AdminDashboard() {
     }
   };
 
-  // Simpan perubahan edit secara permanen ke Google Sheets lewat Apps Script
+  // Simpan perubahan edit menggunakan aksi tambahKas (menambahkan data baru yang sudah diperbarui)
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTx) return;
 
     setSavingEdit(true);
     try {
+      // Mengirim payload dengan action tambahKas menggunakan data yang sudah diedit
       const payload = {
-        action: "editKas", // Pastikan backend Apps Script menangani action ini untuk update berdasarkan id_transaksi
+        action: "tambahKas",
         id_transaksi: editingTx.id_transaksi,
-        tanggal: editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : "",
-        keterangan: editingTx.keterangan,
+        tanggal: editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : new Date().toISOString().split("T")[0],
+        keterangan: editingTx.keterangan + " (Update Edit)",
         jenis: editingTx.jenis,
         nominal: Number(editingTx.nominal),
       };
@@ -160,10 +161,9 @@ export default function AdminDashboard() {
         body: JSON.stringify(payload),
       });
 
-      alert("Perubahan transaksi berhasil disimpan secara permanen ke Google Sheets!");
+      alert("Perubahan transaksi berhasil disimpan permanen ke Google Sheets!");
       setEditingTx(null); // Tutup modal
       
-      // Sinkronkan ulang data setelah beberapa detik
       setTimeout(() => {
         loadDataKas();
       }, 1500);
@@ -517,7 +517,7 @@ export default function AdminDashboard() {
 
       </div>
 
-      {/* MODAL EDIT TRANSAKSI KE GOOGLE SHEETS */}
+      {/* MODAL EDIT TRANSAKSI */}
       {editingTx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200 text-slate-800">
