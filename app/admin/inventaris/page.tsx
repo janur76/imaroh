@@ -4,39 +4,54 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
-export default function InventarisAdminPage() {
-  const router = useRouter();
-  const [inventarisList, setInventarisList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+interface InventarisItem {
+  id_barang?: string;
+  nama_barang?: string;
+  jumlah?: number | string;
+  kondisi?: string;
+  lokasi?: string;
+  [key: string]: any;
+}
 
-  // State Form Tambah Inventaris
+export default function AdminInventaris() {
+  const router = useRouter();
+  const [inventarisList, setInventarisList] = useState<InventarisItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Form input tambah barang baru
   const [namaBarang, setNamaBarang] = useState("");
   const [jumlah, setJumlah] = useState("");
   const [kondisi, setKondisi] = useState("Baik");
-  const [lokasi, setLokasi] = useState("");
+  const [lokasi, setLokasi] = useState("Ruang Utama Masjid");
+
+  // State Modal Edit
+  const [editingItem, setEditingItem] = useState<InventarisItem | null>(null);
 
   const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
 
-  // Fungsi memuat data inventaris dari Sheets
-  const loadInventaris = async () => {
+  const loadDataInventaris = async () => {
     try {
-      const result = await fetchImarohData("all");
+      setLoading(true);
+      const result = await fetchImarohData("inventaris");
       if (result && result.inventaris) {
         setInventarisList(result.inventaris);
       }
     } catch (err) {
-      console.error("Gagal memuat data inventaris:", err);
+      console.error("Gagal memuat inventaris:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadInventaris();
+    loadDataInventaris();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleTambah = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!namaBarang || !jumlah || !lokasi) {
-      alert("Harap lengkapi semua kolom form inventaris!");
+    if (!namaBarang || !jumlah) {
+      alert("Harap isi nama barang dan jumlah!");
       return;
     }
 
@@ -53,134 +68,150 @@ export default function InventarisAdminPage() {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      alert("Berhasil! Data inventaris baru telah dikirim ke Google Sheets.");
+      alert("Barang inventaris berhasil ditambahkan!");
       setNamaBarang("");
       setJumlah("");
-      setLokasi("");
-      setKondisi("Baik");
-
-      setTimeout(() => {
-        loadInventaris();
-      }, 1500);
+      setTimeout(() => loadDataInventaris(), 1500);
     } catch (error) {
-      console.error("Gagal menyimpan inventaris:", error);
-      alert("Terjadi kesalahan saat menyimpan data inventaris.");
+      console.error("Gagal menambah inventaris:", error);
+      alert("Terjadi kesalahan sistem.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Kalkulasi KPI Inventaris (Terpisah & Spesifik per Tab)
-  const totalJenisBarang = inventarisList.length;
-  const totalUnitFisik = inventarisList.reduce((acc, item) => acc + Number(item.jumlah || 0), 0);
-  const totalPerbaikan = inventarisList.filter((item) => String(item.kondisi).toLowerCase().includes("perbaikan") || String(item.kondisi).toLowerCase().includes("rusak")).length;
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+
+    setSavingEdit(true);
+    try {
+      const payload = {
+        action: "editInventaris",
+        id_barang: editingItem.id_barang,
+        nama_barang: editingItem.nama_barang,
+        jumlah: Number(editingItem.jumlah),
+        kondisi: editingItem.kondisi,
+        lokasi: editingItem.lokasi,
+      };
+
+      await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      alert("Inventaris berhasil diperbarui secara permanen!");
+      setEditingItem(null);
+      setTimeout(() => loadDataInventaris(), 1500);
+    } catch (error) {
+      console.error("Gagal mengupdate inventaris:", error);
+      alert("Gagal memperbarui data.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async (id_barang: string) => {
+    if (!confirm(`Yakin ingin menghapus barang dengan ID ${id_barang}?`)) return;
+
+    try {
+      const payload = {
+        action: "hapusInventaris",
+        id_barang: id_barang,
+      };
+
+      await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      alert("Barang inventaris berhasil dihapus!");
+      setTimeout(() => loadDataInventaris(), 1500);
+    } catch (error) {
+      console.error("Gagal menghapus inventaris:", error);
+      alert("Gagal menghapus data.");
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Top Bar Admin Inventaris */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        {/* Top Bar */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
           <div>
-            <span className="text-xs uppercase tracking-wider font-semibold text-[#047857] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-              Modul Aset & Inventaris DKM
+            <span className="text-xs uppercase font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+              Modul Inventaris Masjid
             </span>
-            <h1 className="text-2xl font-extrabold text-[#0b1c30] mt-2">
-              Manajemen Inventaris Masjid
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Kelola aset fisik, kondisi barang, dan lokasi penyimpanan dari database Google Sheets.
-            </p>
+            <h1 className="text-2xl font-extrabold text-[#0b1c30] mt-2">Kelola Aset & Inventaris</h1>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/admin")}
-              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold transition duration-200 shadow-sm"
-            >
-              ← Kembali ke Dashboard Keuangan
-            </button>
-          </div>
+          <button
+            onClick={() => router.push("/admin")}
+            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+          >
+            ← Kembali ke Dashboard Kas
+          </button>
         </div>
 
-        {/* KPI Cards khusus Klaster Inventaris (Terpisah dari Keuangan) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-gradient-to-br from-[#064e3b] to-[#003527] text-white p-6 rounded-2xl shadow-md">
-            <span className="text-xs text-[#b0f0d6] uppercase tracking-wider font-semibold">Total Jenis Barang</span>
-            <h3 className="text-3xl font-extrabold mt-2">{totalJenisBarang} Item</h3>
-            <p className="text-xs text-[#b0f0d6] mt-1">Jenis aset terdaftar di database</p>
-          </div>
+        {/* Form Tambah & Ringkasan */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Unit Fisik</span>
-            <h3 className="text-3xl font-extrabold text-[#047857] mt-2">{totalUnitFisik} Unit</h3>
-            <p className="text-xs text-slate-500 mt-1">Akumulasi jumlah seluruh barang</p>
-          </div>
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Perlu Perbaikan / Perhatian</span>
-            <h3 className={`text-3xl font-extrabold mt-2 ${totalPerbaikan > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-              {totalPerbaikan} Item
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">Barang dengan status pemeliharaan</p>
-          </div>
-        </div>
-
-        {/* Form & Tabel Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          {/* Form Tambah Inventaris */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 md:col-span-1">
-            <h2 className="font-bold text-lg text-[#0b1c30] mb-4">Tambah Barang Baru</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <h2 className="font-bold text-lg text-[#0b1c30] mb-4">Tambah Barang Inventaris</h2>
+            <form onSubmit={handleTambah} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Barang / Aset</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Barang</label>
                 <input
                   type="text"
                   value={namaBarang}
                   onChange={(e) => setNamaBarang(e.target.value)}
-                  placeholder="Contoh: AC Standing 5 PK"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
+                  placeholder="Contoh: AC Daikin 2PK"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   required
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Jumlah Unit</label>
-                <input
-                  type="number"
-                  value={jumlah}
-                  onChange={(e) => setJumlah(e.target.value)}
-                  placeholder="Contoh: 2"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Jumlah</label>
+                  <input
+                    type="number"
+                    value={jumlah}
+                    onChange={(e) => setJumlah(e.target.value)}
+                    placeholder="1"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Kondisi</label>
+                  <select
+                    value={kondisi}
+                    onChange={(e) => setKondisi(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  >
+                    <option value="Baik">Baik</option>
+                    <option value="Kurang Baik">Kurang Baik</option>
+                    <option value="Rusak">Rusak</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Kondisi Fisik</label>
-                <select
-                  value={kondisi}
-                  onChange={(e) => setKondisi(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
-                >
-                  <option value="Baik">Baik (Normal)</option>
-                  <option value="Perbaikan">Perbaikan (Maintenance)</option>
-                  <option value="Rusak">Rusak (Tidak Berfungsi)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Lokasi Penyimpanan / Ruangan</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Lokasi Penyimpanan</label>
                 <input
                   type="text"
                   value={lokasi}
                   onChange={(e) => setLokasi(e.target.value)}
-                  placeholder="Contoh: Ruang Shalat Utama"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
+                  placeholder="Ruang Utama Masjid"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   required
                 />
               </div>
@@ -188,70 +219,170 @@ export default function InventarisAdminPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 px-4 rounded-xl bg-[#047857] hover:bg-[#064e3b] text-white font-semibold text-sm transition duration-200 shadow-md disabled:opacity-50"
+                className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition shadow-md disabled:opacity-50"
               >
-                {loading ? "Menyimpan ke Sheets..." : "Simpan Aset ke Sheets"}
+                {loading ? "Menyimpan..." : "Tambah ke Inventaris"}
               </button>
             </form>
           </div>
 
-          {/* Tabel Daftar Inventaris */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 md:col-span-2 space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="font-bold text-lg text-[#0b1c30]">Daftar Aset & Inventaris Masjid</h2>
-              <button
-                onClick={loadInventaris}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition duration-200 border border-slate-200"
-              >
-                Sinkronisasi Data
-              </button>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+            <div>
+              <h2 className="font-bold text-lg text-[#0b1c30]">Informasi Aset</h2>
+              <p className="text-xs text-slate-500 mt-1">Total jenis barang terdaftar di database:</p>
+              <div className="mt-6 p-6 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-emerald-800 font-semibold uppercase">Total Jenis Barang</span>
+                  <h3 className="text-3xl font-extrabold text-emerald-700 mt-1">{inventarisList.length} Item</h3>
+                </div>
+                <span className="text-3xl">📦</span>
+              </div>
             </div>
+            <button
+              onClick={loadDataInventaris}
+              className="mt-6 w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition border border-slate-200"
+            >
+              🔄 Sinkronisasi Ulang Data
+            </button>
+          </div>
+        </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600">
-                <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="p-3">ID Barang</th>
-                    <th className="p-3">Nama Barang</th>
-                    <th className="p-3 text-center">Jumlah</th>
-                    <th className="p-3">Kondisi</th>
-                    <th className="p-3">Lokasi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {inventarisList.length > 0 ? (
-                    inventarisList.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition">
-                        <td className="p-3 font-mono font-semibold text-slate-700">{item.id_barang || "-"}</td>
-                        <td className="p-3 font-medium text-slate-800">{item.nama_barang || "-"}</td>
-                        <td className="p-3 text-center font-bold text-slate-800">{item.jumlah || 0}</td>
-                        <td className="p-3">
-                          <span className={`px-2.5 py-1 rounded-full font-semibold text-[10px] ${
-                            String(item.kondisi).toLowerCase().includes("baik") 
-                              ? "bg-emerald-100 text-emerald-800" 
-                              : "bg-amber-100 text-amber-800"
-                          }`}>
-                            {item.kondisi || "Baik"}
-                          </span>
-                        </td>
-                        <td className="p-3 text-slate-600">{item.lokasi || "-"}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400">
-                        Memuat data inventaris dari Google Sheets...
+        {/* Tabel Inventaris */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <h2 className="font-bold text-lg text-[#0b1c30]">Daftar Inventaris Masjid</h2>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200">
+                <tr>
+                  <th className="p-3">ID Barang</th>
+                  <th className="p-3">Nama Barang</th>
+                  <th className="p-3 text-center">Jumlah</th>
+                  <th className="p-3">Kondisi</th>
+                  <th className="p-3">Lokasi</th>
+                  <th className="p-3 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {inventarisList.length > 0 ? (
+                  inventarisList.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="p-3 font-mono font-semibold text-emerald-700">{item.id_barang || "-"}</td>
+                      <td className="p-3 font-medium text-slate-900">{item.nama_barang || "-"}</td>
+                      <td className="p-3 text-center font-bold text-slate-800">{item.jumlah || 1}</td>
+                      <td className="p-3">
+                        <span className={`px-2.5 py-1 rounded-full font-semibold text-[10px] ${
+                          item.kondisi === "Baik" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                        }`}>
+                          {item.kondisi || "Baik"}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-700">{item.lokasi || "-"}</td>
+                      <td className="p-3 text-center space-x-2 whitespace-nowrap">
+                        <button
+                          onClick={() => setEditingItem(item)}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.id_barang || "")}
+                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition"
+                        >
+                          Hapus
+                        </button>
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                      Belum ada data inventaris yang tercatat.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-
         </div>
 
       </div>
+
+      {/* MODAL EDIT INVENTARIS */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-slate-800">
+            <h3 className="text-lg font-bold text-[#0b1c30] mb-1">Edit Inventaris</h3>
+            <p className="text-xs text-slate-500 mb-4 font-mono">ID: {editingItem.id_barang}</p>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Nama Barang</label>
+                <input
+                  type="text"
+                  value={editingItem.nama_barang || ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, nama_barang: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Jumlah</label>
+                  <input
+                    type="number"
+                    value={editingItem.jumlah || 1}
+                    onChange={(e) => setEditingItem({ ...editingItem, jumlah: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Kondisi</label>
+                  <select
+                    value={editingItem.kondisi || "Baik"}
+                    onChange={(e) => setEditingItem({ ...editingItem, kondisi: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  >
+                    <option value="Baik">Baik</option>
+                    <option value="Kurang Baik">Kurang Baik</option>
+                    <option value="Rusak">Rusak</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Lokasi</label>
+                <input
+                  type="text"
+                  value={editingItem.lokasi || ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, lokasi: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md disabled:opacity-50"
+                >
+                  {savingEdit ? "Menyimpan..." : "Simpan Perubahan"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
