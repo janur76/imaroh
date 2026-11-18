@@ -102,15 +102,25 @@ export default function PublicPortal() {
         </div>
       </header>
 
-      {/* Running Text Berjalan dengan Marquee */}
+      {/* Running Text Berjalan Dinamis dengan CSS Animation */}
       {profil.running_text && (
-        <div className="bg-[#064e3b] text-emerald-50 text-xs py-2.5 px-4 overflow-hidden shadow-inner">
-          <marquee scrollamount="5" behavior="scroll" direction="left" className="font-medium">
-            📢 {profil.running_text} &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp; 📍 {profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo"}
-          </marquee>
+        <div className="bg-[#064e3b] text-emerald-50 text-xs py-2.5 px-4 overflow-hidden relative shadow-inner whitespace-nowrap">
+          <style jsx>{`
+            @keyframes marquee {
+              0% { transform: translateX(100%); }
+              100% { transform: translateX(-100%); }
+            }
+            .animate-ticker {
+              display: inline-block;
+              animation: marquee 25s linear infinite;
+            }
+          `}</style>
+          <div className="animate-ticker font-medium">
+            📢 {profil.running_text} &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp; 📍 {profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo"} &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp; 🕌 Selamat Datang di Portal Resmi Masjid Digital
+          </div>
         </div>
       )}
-
+      
       {/* Hero Section & Ringkasan Saldo */}
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-8">
         <div className="bg-gradient-to-br from-[#064e3b] via-[#047857] to-[#022c22] text-white p-8 md:p-10 rounded-3xl shadow-xl relative overflow-hidden">
