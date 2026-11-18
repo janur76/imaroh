@@ -100,41 +100,59 @@ export default function AdminDashboard() {
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nominal || !keterangan) {
-      alert("Harap isi nominal dan keterangan transaksi!");
-      return;
-    }
+  e.preventDefault();
 
-    setLoading(true);
-    try {
-      const payload = {
+  const nilaiNominal = Number(nominal);
+  const ket = keterangan.trim();
+
+  if (!ket || !Number.isFinite(nilaiNominal) || nilaiNominal <= 0) {
+    alert("Isi keterangan dan nominal yang lebih besar dari 0.");
+    return;
+  }
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const getPart = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  const tanggal = `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+
+  setLoading(true);
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify({
         action: "tambahKas",
-        jenis: jenis,
-        nominal: Number(nominal),
-        keterangan: keterangan,
-        tanggal: new Date().toISOString().split("T")[0],
-      };
+        jenis,
+        nominal: nilaiNominal,
+        keterangan: ket,
+        tanggal,
+      }),
+    });
 
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      alert("Berhasil! Data transaksi kas telah dikirim ke Google Sheets.");
-      setNominal("");
-      setKeterangan("");
-      setTimeout(() => loadDataKas(), 1500);
-    } catch (error) {
-      console.error("Gagal menyimpan transaksi:", error);
-      alert("Terjadi kesalahan saat menyimpan ke database.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+    alert(
+      "Permintaan dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
+      "Periksa Google Sheets sebelum mengirim ulang agar tidak terjadi duplikat."
+    );
+    setTimeout(() => loadDataKas(), 1500);
+  } catch (error) {
+    console.error("Gagal mengirim transaksi:", error);
+    alert(
+      "Permintaan gagal atau hasilnya tidak diketahui. " +
+      "Periksa Google Sheets sebelum mencoba lagi."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+  
   // Fungsi Edit Transaksi (Anti Duplikat - Memanggil action "editKas")
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
