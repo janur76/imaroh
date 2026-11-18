@@ -39,27 +39,18 @@ export default function AdminDashboard() {
   const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/1v4ckXNCDzC749ecoLLaaAch4Fbfw7bWr6tirfYgYMfw/edit?gid=501383615#gid=501383615";
 
   // Fungsi untuk memuat data transaksi dari Sheets
-  const loadDataKas = async () => {
+  const const loadDataKas = async () => {
     try {
       const result = await fetchImarohData("all");
       if (result && result.kas) {
-        // Ambil data asli dari Google Sheets tanpa membalik urutan (agar indeks baris/ID konsisten)
+        // Ambil data langsung dari Google Sheets tanpa override ID
         const rawData = result.kas;
         
-        const formattedData = rawData.map((item: any, index: number) => {
-          const currentId = item.id_transaksi || item.id;
-          if (currentId && String(currentId).startsWith("TRX-")) {
-            return { ...item, id_transaksi: currentId };
-          }
-          
-          const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
-          const [y, m] = dateStr.split("-");
-          const ym = y && m ? `${y}${m}` : "202611";
-          const paddedIdx = String(index + 1).padStart(3, "0");
-
+        const formattedData = rawData.map((item: any) => {
           return {
             ...item,
-            id_transaksi: currentId || `TRX-${ym}-${paddedIdx}`
+            // Jika di sheets sudah ada id_transaksi (IN-, OUT-, TRX-), gunakan itu. Jika kosong, buatkan fallback yang sesuai jenisnya.
+            id_transaksi: item.id_transaksi || item.id || "IN-202611-001"
           };
         });
 
