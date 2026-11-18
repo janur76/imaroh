@@ -20,7 +20,6 @@ export default function PublicPortal() {
           setProfil(data.profil[0]);
         }
         if (data.kas) {
-          // Urutkan dan format ID MBM-YYYYMM-XXX secara konsisten
           const rawKas = [...data.kas].reverse();
           const formattedKas = rawKas.map((item: any, index: number) => {
             const currentId = item.id_transaksi || item.id;
@@ -103,12 +102,12 @@ export default function PublicPortal() {
         </div>
       </header>
 
-      {/* Running Text */}
+      {/* Running Text Berjalan dengan Marquee */}
       {profil.running_text && (
-        <div className="bg-[#064e3b] text-emerald-50 text-xs py-2.5 px-4 overflow-hidden whitespace-nowrap shadow-inner">
-          <div className="inline-block animate-marquee font-medium">
+        <div className="bg-[#064e3b] text-emerald-50 text-xs py-2.5 px-4 overflow-hidden shadow-inner">
+          <marquee scrollamount="5" behavior="scroll" direction="left" className="font-medium">
             📢 {profil.running_text} &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp; 📍 {profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo"}
-          </div>
+          </marquee>
         </div>
       )}
 
@@ -143,7 +142,7 @@ export default function PublicPortal() {
           </div>
         </div>
 
-        {/* Tabel Mutasi Kas Publik (Menampilkan Seluruh Transaksi Terbaru Tanpa Terpotong) */}
+        {/* Tabel Mutasi Kas Publik */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
             <div className="flex justify-between items-center">
@@ -192,7 +191,7 @@ export default function PublicPortal() {
                   {kasList.length === 0 && (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-slate-400">
-                        Belum ada data kas yang tercatat.
+                        Belum ada data kas yang tercatat di database.
                       </td>
                     </tr>
                   )}
@@ -205,13 +204,15 @@ export default function PublicPortal() {
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 text-center space-y-3">
               <h3 className="font-extrabold text-sm text-[#0b1c30]">💳 QRIS Donasi / Infak</h3>
-              <p className="text-[11px] text-slate-500">Scan QRIS di bawah ini untuk menyalurkan infak secara nontunai.</p>
+              <p className="text-[11px] text-slate-500">Scan QRIS di bawah ini untuk menyalurkan infak atau donasi ke masjid secara nontunai.</p>
               
               <div className="w-48 h-48 mx-auto bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center p-2 overflow-hidden shadow-inner">
                 {profil.qris_url ? (
-                  <img src={profil.qris_url} alt="QRIS Donasi" className="w-full h-full object-contain" />
+                  <img src={profil.qris_url} alt="QRIS Donasi Masjid" className="w-full h-full object-contain" />
                 ) : (
-                  <div className="text-xs text-slate-400 p-4">QRIS belum diatur admin.</div>
+                  <div className="text-xs text-slate-400 p-4">
+                    QRIS belum diatur oleh admin di menu Profil.
+                  </div>
                 )}
               </div>
             </div>
@@ -230,15 +231,20 @@ export default function PublicPortal() {
                     <p className="text-[11px] text-slate-600">Pemateri: <span className="font-semibold">{kajian.pemateri || "Ustadz"}</span></p>
                   </div>
                 ))}
+                {kajianList.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-4">Belum ada jadwal kajian.</p>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Footer Publik */}
       <footer className="mt-16 border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
         <p>© 2026 {profil.nama_masjid || "Masjid Baitul Mu'minin"} • Powered by Imaroh SaaS (Kalibu ID)</p>
       </footer>
+
     </main>
   );
 }
