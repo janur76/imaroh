@@ -20,24 +20,8 @@ export default function PublicPortal() {
           setProfil(data.profil[0]);
         }
         if (data.kas) {
-          const rawKas = [...data.kas].reverse();
-          const formattedKas = rawKas.map((item: any, index: number) => {
-            const currentId = item.id_transaksi || item.id;
-            if (currentId && String(currentId).startsWith("MBM-")) {
-              return { ...item, id_transaksi: currentId };
-            }
-            
-            const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
-            const [y, m] = dateStr.split("-");
-            const ym = y && m ? `${y}${m}` : "202611";
-            const paddedIdx = String(rawKas.length - index).padStart(3, "0");
-
-            return {
-              ...item,
-              id_transaksi: `MBM-${ym}-${paddedIdx}`
-            };
-          });
-          setKasList(formattedKas);
+          // Tampilkan data terbaru lebih dulu tanpa mengubah ID dari database.
+          setKasList([...data.kas].reverse());
         }
         if (data.inventaris) {
           setInventarisList(data.inventaris);
@@ -202,7 +186,7 @@ export default function PublicPortal() {
                   {kasList.slice(0, 20).map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
                       <td className="p-3 whitespace-nowrap font-mono font-semibold text-emerald-700">
-                        {item.id_transaksi || `MBM-202611-00${idx + 1}`}
+                        {item.id_transaksi || item.id || "-"}
                       </td>
                       <td className="p-3 whitespace-nowrap font-medium text-slate-700">
                         {item.tanggal ? String(item.tanggal).split("T")[0] : "-"}
