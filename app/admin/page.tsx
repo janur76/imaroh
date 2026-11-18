@@ -135,19 +135,18 @@ export default function AdminDashboard() {
     }
   };
 
-  // Simpan perubahan edit menggunakan aksi tambahKas (menambahkan data baru yang sudah diperbarui)
+  // DIPERBAIKI: Menggunakan aksi "editKas" agar menimpa baris lama berdasarkan id_transaksi (Anti Duplikat)
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTx) return;
 
     setSavingEdit(true);
     try {
-      // Mengirim payload dengan action tambahKas menggunakan data yang sudah diedit
       const payload = {
-        action: "tambahKas",
+        action: "editKas",
         id_transaksi: editingTx.id_transaksi,
-        tanggal: editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : new Date().toISOString().split("T")[0],
-        keterangan: editingTx.keterangan + " (Update Edit)",
+        tanggal: editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : "",
+        keterangan: editingTx.keterangan,
         jenis: editingTx.jenis,
         nominal: Number(editingTx.nominal),
       };
@@ -560,7 +559,7 @@ export default function AdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Nominal (Rp)</label>
+                  <label className="block y-2 font-medium text-slate-700 mb-1 text-xs">Nominal (Rp)</label>
                   <input 
                     type="number" 
                     value={editingTx.nominal || 0}
