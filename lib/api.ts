@@ -1,7 +1,7 @@
 // --- LIB API UNTUK IMAROH KALIBU ---
 
 // Ganti URL di bawah ini dengan URL Web App Google Apps Script terbaru milikmu yang berakhiran /exec
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwcbB0bdYWA2VKPAssCQvoIl5gCV3ZjTO3qodOMCXZ5tJ_-vZ7H0H6gjVhxBnZskb4b/exec";
 
 export async function fetchImarohData(action = "all") {
   try {
