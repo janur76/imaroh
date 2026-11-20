@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
-import { ADMIN_COOKIE_NAME } from "@/lib/auth";
+import { ADMIN_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth";
 
 export async function POST() {
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(ADMIN_COOKIE_NAME, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  });
-  return response;
+  try {
+    const response = NextResponse.json({ ok: true });
+    response.cookies.set(ADMIN_COOKIE_NAME, "", {
+      ...getSessionCookieOptions(),
+      maxAge: 0,
+    });
+    return response;
+  } catch (err) {
+    console.error("Logout error:", err);
+    return NextResponse.json(
+      { error: "Terjadi kesalahan saat menghapus sesi." },
+      { status: 500 }
+    );
+  }
 }
