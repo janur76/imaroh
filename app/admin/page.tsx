@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fetchImarohData } from "@/lib/api";
+import { fetchImarohData, IMAROH_APPS_SCRIPT_URL } from "@/lib/api";
 
 interface Transaction {
   id_transaksi?: string;
@@ -19,6 +19,7 @@ export default function AdminDashboard() {
   const [nominal, setNominal] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
   const [transaksiList, setTransaksiList] = useState<Transaction[]>([]);
 
@@ -35,16 +36,15 @@ export default function AdminDashboard() {
     kasKeluar: 0,
   });
 
-  const APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
   const GOOGLE_SHEETS_URL =
     "https://docs.google.com/spreadsheets/d/1v4ckXNCDzC749ecoLLaaAch4Fbfw7bWr6tirfYgYMfw/edit?gid=501383615#gid=501383615";
 
   // Fungsi untuk memuat data transaksi dari Sheets
   const loadDataKas = async () => {
     try {
+      setLoadingData(true);
       const result = await fetchImarohData("all");
-      if (result && result.kas) {
+      if (result && Array.isArray(result.kas)) {
         const rawData = result.kas;
 
         // Langsung gunakan ID asli dari Google Sheets (IN-, OUT-, atau TRX-) tanpa di-override paksa
@@ -94,6 +94,8 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error("Gagal memuat data kas:", err);
+    } finally {
+      setLoadingData(false);
     }
   };
 
@@ -137,7 +139,7 @@ export default function AdminDashboard() {
 
     setLoading(true);
     try {
-      await fetch(APPS_SCRIPT_URL, {
+      await fetch(IMAROH_APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
@@ -154,6 +156,8 @@ export default function AdminDashboard() {
         "Permintaan dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
           "Periksa Google Sheets sebelum mengirim ulang agar tidak terjadi duplikat."
       );
+      setNominal("");
+      setKeterangan("");
       setTimeout(() => loadDataKas(), 1500);
     } catch (error) {
       console.error("Gagal mengirim transaksi:", error);
@@ -182,7 +186,7 @@ export default function AdminDashboard() {
         nominal: Number(editingTx.nominal),
       };
 
-      await fetch(APPS_SCRIPT_URL, {
+      await fetch(IMAROH_APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
@@ -216,7 +220,7 @@ export default function AdminDashboard() {
         id_transaksi: id_transaksi,
       };
 
-      await fetch(APPS_SCRIPT_URL, {
+      await fetch(IMAROH_APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
@@ -298,18 +302,21 @@ export default function AdminDashboard() {
               📊 Buka Sheets
             </a>
             <button
+              type="button"
               onClick={() => router.push("/admin/inventaris")}
               className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#047857] border border-emerald-200 text-xs font-semibold"
             >
               📦 Inventaris
             </button>
             <button
+              type="button"
               onClick={() => router.push("/admin/kajian")}
               className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#047857] border border-emerald-200 text-xs font-semibold"
             >
               📅 Kajian
             </button>
             <button
+              type="button"
               onClick={() => router.push("/admin/profil")}
               className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#047857] border border-emerald-200 text-xs font-semibold"
             >
@@ -330,19 +337,19 @@ export default function AdminDashboard() {
           <div className="bg-gradient-to-br from-[#064e3b] to-[#003527] text-white p-6 rounded-2xl shadow-md">
             <span className="text-xs text-[#b0f0d6] uppercase font-semibold">Total Saldo Kas</span>
             <h3 className="text-3xl font-extrabold mt-2">
-              Rp {kpi.saldoAkhir.toLocaleString("id-ID")}
+              {loadingData ? "Memuat..." : `Rp ${kpi.saldoAkhir.toLocaleString("id-ID")}`}
             </h3>
           </div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <span className="text-xs text-slate-400 uppercase font-semibold">Total Kas Masuk</span>
             <h3 className="text-3xl font-extrabold text-[#047857] mt-2">
-              Rp {kpi.kasMasuk.toLocaleString("id-ID")}
+              {loadingData ? "Memuat..." : `Rp ${kpi.kasMasuk.toLocaleString("id-ID")}`}
             </h3>
           </div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <span className="text-xs text-slate-400 uppercase font-semibold">Total Kas Keluar</span>
             <h3 className="text-3xl font-extrabold text-rose-600 mt-2">
-              Rp {kpi.kasKeluar.toLocaleString("id-ID")}
+              {loadingData ? "Memuat..." : `Rp ${kpi.kasKeluar.toLocaleString("id-ID")}`}
             </h3>
           </div>
         </div>
@@ -414,9 +421,10 @@ export default function AdminDashboard() {
             <button
               type="button"
               onClick={loadDataKas}
-              className="mt-6 w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition border border-slate-200"
+              disabled={loadingData}
+              className="mt-6 w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition border border-slate-200 disabled:opacity-50"
             >
-              Sinkronisasi Ulang Data Sheets
+              {loadingData ? "Menyinkronkan..." : "Sinkronisasi Ulang Data Sheets"}
             </button>
           </div>
         </div>
@@ -465,6 +473,18 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          <div className="flex flex-wrap justify-between items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <span className="text-slate-600 font-medium">
+              Menampilkan <strong className="text-slate-900">{filteredTransaksi.length}</strong> transaksi
+            </span>
+            <span className="text-slate-600 font-medium">
+              Total Nominal Filter:{" "}
+              <strong className="text-[#047857]">
+                Rp {totalNominalFilter.toLocaleString("id-ID")}
+              </strong>
+            </span>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200">
@@ -478,9 +498,18 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredTransaksi.length > 0 ? (
+                {loadingData ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                      Memuat data transaksi dari Google Sheets...
+                    </td>
+                  </tr>
+                ) : filteredTransaksi.length > 0 ? (
                   filteredTransaksi.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition">
+                    <tr
+                      key={`${item.id_transaksi || "tx"}-${idx}`}
+                      className="hover:bg-slate-50 transition"
+                    >
                       <td className="p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
                         {item.id_transaksi || "-"}
                       </td>
@@ -576,11 +605,15 @@ export default function AdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Nominal (Rp)</label>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Nominal (Rp)
+                  </label>
                   <input
                     type="number"
                     value={editingTx.nominal || 0}
-                    onChange={(e) => setEditingTx({ ...editingTx, nominal: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setEditingTx({ ...editingTx, nominal: Number(e.target.value) })
+                    }
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
                     required
                   />
