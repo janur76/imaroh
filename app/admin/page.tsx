@@ -21,7 +21,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [transaksiList, setTransaksiList] = useState<Transaction[]>([]);
-  
+
   // State untuk Filter & Pencarian
   const [filterBulan, setFilterBulan] = useState("semua");
   const [filterJenis, setFilterJenis] = useState("semua");
@@ -35,8 +35,10 @@ export default function AdminDashboard() {
     kasKeluar: 0,
   });
 
-  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
-  const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/1v4ckXNCDzC749ecoLLaaAch4Fbfw7bWr6tirfYgYMfw/edit?gid=501383615#gid=501383615";
+  const APPS_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
+  const GOOGLE_SHEETS_URL =
+    "https://docs.google.com/spreadsheets/d/1v4ckXNCDzC749ecoLLaaAch4Fbfw7bWr6tirfYgYMfw/edit?gid=501383615#gid=501383615";
 
   // Fungsi untuk memuat data transaksi dari Sheets
   const loadDataKas = async () => {
@@ -44,15 +46,15 @@ export default function AdminDashboard() {
       const result = await fetchImarohData("all");
       if (result && result.kas) {
         const rawData = result.kas;
-        
+
         // Langsung gunakan ID asli dari Google Sheets (IN-, OUT-, atau TRX-) tanpa di-override paksa
         const formattedData = rawData.map((item: any, index: number) => {
           const originalId = item.id_transaksi || item.id;
-          
+
           if (originalId) {
             return { ...item, id_transaksi: originalId };
           }
-          
+
           // Fallback jika kosong di sheets
           const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
           const [y, m] = dateStr.split("-");
@@ -63,7 +65,7 @@ export default function AdminDashboard() {
 
           return {
             ...item,
-            id_transaksi: `${prefix}${ym}-${paddedIdx}`
+            id_transaksi: `${prefix}${ym}-${paddedIdx}`,
           };
         });
 
@@ -76,7 +78,7 @@ export default function AdminDashboard() {
         formattedData.forEach((item: any) => {
           const nominalVal = Number(item.nominal || 0);
           const jenisStr = String(item.jenis || "").toLowerCase();
-          
+
           if (jenisStr.includes("masuk")) {
             totalMasuk += nominalVal;
           } else if (jenisStr.includes("keluar")) {
@@ -99,60 +101,71 @@ export default function AdminDashboard() {
     loadDataKas();
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (err) {
+      console.error("Gagal logout:", err);
+    } finally {
+      router.replace("/admin/login");
+      router.refresh();
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  const nilaiNominal = Number(nominal);
-  const ket = keterangan.trim();
+    const nilaiNominal = Number(nominal);
+    const ket = keterangan.trim();
 
-  if (!ket || !Number.isFinite(nilaiNominal) || nilaiNominal <= 0) {
-    alert("Isi keterangan dan nominal yang lebih besar dari 0.");
-    return;
-  }
+    if (!ket || !Number.isFinite(nilaiNominal) || nilaiNominal <= 0) {
+      alert("Isi keterangan dan nominal yang lebih besar dari 0.");
+      return;
+    }
 
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Jakarta",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
 
-  const getPart = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
+    const getPart = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value ?? "";
 
-  const tanggal = `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+    const tanggal = `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
 
-  setLoading(true);
-  try {
-    await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=UTF-8" },
-      body: JSON.stringify({
-        action: "tambahKas",
-        jenis,
-        nominal: nilaiNominal,
-        keterangan: ket,
-        tanggal,
-      }),
-    });
+    setLoading(true);
+    try {
+      await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: JSON.stringify({
+          action: "tambahKas",
+          jenis,
+          nominal: nilaiNominal,
+          keterangan: ket,
+          tanggal,
+        }),
+      });
 
-    alert(
-      "Permintaan dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
-      "Periksa Google Sheets sebelum mengirim ulang agar tidak terjadi duplikat."
-    );
-    setTimeout(() => loadDataKas(), 1500);
-  } catch (error) {
-    console.error("Gagal mengirim transaksi:", error);
-    alert(
-      "Permintaan gagal atau hasilnya tidak diketahui. " +
-      "Periksa Google Sheets sebelum mencoba lagi."
-    );
-  } finally {
-    setLoading(false);
-  }
-};
-  
+      alert(
+        "Permintaan dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
+          "Periksa Google Sheets sebelum mengirim ulang agar tidak terjadi duplikat."
+      );
+      setTimeout(() => loadDataKas(), 1500);
+    } catch (error) {
+      console.error("Gagal mengirim transaksi:", error);
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fungsi Edit Transaksi (Anti Duplikat - Memanggil action "editKas")
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,16 +185,22 @@ export default function AdminDashboard() {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify(payload),
       });
 
-      alert("Perubahan transaksi berhasil disimpan permanen ke Google Sheets!");
+      alert(
+        "Permintaan perubahan dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
+          "Periksa Google Sheets untuk memastikan data sudah terbarui."
+      );
       setEditingTx(null);
       setTimeout(() => loadDataKas(), 1500);
     } catch (error) {
       console.error("Gagal memperbarui transaksi:", error);
-      alert("Terjadi kesalahan saat memperbarui data ke database.");
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
     } finally {
       setSavingEdit(false);
     }
@@ -200,15 +219,21 @@ export default function AdminDashboard() {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify(payload),
       });
 
-      alert("Transaksi kas berhasil dihapus dari database!");
+      alert(
+        "Permintaan penghapusan dikirim, tetapi hasilnya belum dapat diverifikasi. " +
+          "Periksa Google Sheets untuk memastikan transaksi sudah terhapus."
+      );
       setTimeout(() => loadDataKas(), 1500);
     } catch (error) {
       console.error("Gagal menghapus transaksi:", error);
-      alert("Terjadi kesalahan saat menghapus data.");
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
     }
   };
 
@@ -230,7 +255,10 @@ export default function AdminDashboard() {
     return matchBulan && matchJenis;
   });
 
-  const totalNominalFilter = filteredTransaksi.reduce((acc, item) => acc + Number(item.nominal || 0), 0);
+  const totalNominalFilter = filteredTransaksi.reduce(
+    (acc, item) => acc + Number(item.nominal || 0),
+    0
+  );
 
   const daftarBulanUnik = Array.from(
     new Set(
@@ -238,7 +266,9 @@ export default function AdminDashboard() {
         .map((item) => (item.tanggal ? String(item.tanggal).split("T")[0].slice(0, 7) : ""))
         .filter((b) => b !== "")
     )
-  ).sort().reverse();
+  )
+    .sort()
+    .reverse();
 
   const handleCetakLaporan = () => {
     window.print();
@@ -247,7 +277,6 @@ export default function AdminDashboard() {
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        
         {/* Top Bar Admin */}
         <div className="no-print bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -258,7 +287,7 @@ export default function AdminDashboard() {
               Dashboard Keuangan & Masjid Digital
             </h1>
           </div>
-          
+
           <div className="flex flex-wrap items-center gap-2">
             <a
               href={GOOGLE_SHEETS_URL}
@@ -287,7 +316,8 @@ export default function AdminDashboard() {
               ⚙️ Profil
             </button>
             <button
-              onClick={() => router.push("/")}
+              type="button"
+              onClick={handleLogout}
               className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
             >
               Keluar
@@ -299,15 +329,21 @@ export default function AdminDashboard() {
         <div className="no-print grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-gradient-to-br from-[#064e3b] to-[#003527] text-white p-6 rounded-2xl shadow-md">
             <span className="text-xs text-[#b0f0d6] uppercase font-semibold">Total Saldo Kas</span>
-            <h3 className="text-3xl font-extrabold mt-2">Rp {kpi.saldoAkhir.toLocaleString("id-ID")}</h3>
+            <h3 className="text-3xl font-extrabold mt-2">
+              Rp {kpi.saldoAkhir.toLocaleString("id-ID")}
+            </h3>
           </div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <span className="text-xs text-slate-400 uppercase font-semibold">Total Kas Masuk</span>
-            <h3 className="text-3xl font-extrabold text-[#047857] mt-2">Rp {kpi.kasMasuk.toLocaleString("id-ID")}</h3>
+            <h3 className="text-3xl font-extrabold text-[#047857] mt-2">
+              Rp {kpi.kasMasuk.toLocaleString("id-ID")}
+            </h3>
           </div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <span className="text-xs text-slate-400 uppercase font-semibold">Total Kas Keluar</span>
-            <h3 className="text-3xl font-extrabold text-rose-600 mt-2">Rp {kpi.kasKeluar.toLocaleString("id-ID")}</h3>
+            <h3 className="text-3xl font-extrabold text-rose-600 mt-2">
+              Rp {kpi.kasKeluar.toLocaleString("id-ID")}
+            </h3>
           </div>
         </div>
 
@@ -317,7 +353,9 @@ export default function AdminDashboard() {
             <h2 className="font-bold text-lg text-[#0b1c30] mb-4">Catat Transaksi Kas Baru</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Jenis Transaksi</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Jenis Transaksi
+                </label>
                 <select
                   value={jenis}
                   onChange={(e) => setJenis(e.target.value)}
@@ -328,7 +366,9 @@ export default function AdminDashboard() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nominal (Rp)</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nominal (Rp)
+                </label>
                 <input
                   type="number"
                   value={nominal}
@@ -339,7 +379,9 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Keterangan / Uraian</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Keterangan / Uraian
+                </label>
                 <input
                   type="text"
                   value={keterangan}
@@ -370,6 +412,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <button
+              type="button"
               onClick={loadDataKas}
               className="mt-6 w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition border border-slate-200"
             >
@@ -383,9 +426,11 @@ export default function AdminDashboard() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h2 className="font-bold text-lg text-[#0b1c30]">Riwayat Mutasi & Laporan Kas</h2>
-              <p className="text-xs text-slate-500">Filter transaksi berdasarkan bulan dan jenis pengeluaran/pemasukan.</p>
+              <p className="text-xs text-slate-500">
+                Filter transaksi berdasarkan bulan dan jenis pengeluaran/pemasukan.
+              </p>
             </div>
-            
+
             <div className="flex flex-wrap items-center gap-3">
               <select
                 value={filterBulan}
@@ -394,7 +439,9 @@ export default function AdminDashboard() {
               >
                 <option value="semua">Semua Bulan</option>
                 {daftarBulanUnik.map((bulan) => (
-                  <option key={bulan} value={bulan}>Bulan: {bulan}</option>
+                  <option key={bulan} value={bulan}>
+                    Bulan: {bulan}
+                  </option>
                 ))}
               </select>
 
@@ -409,6 +456,7 @@ export default function AdminDashboard() {
               </select>
 
               <button
+                type="button"
                 onClick={handleCetakLaporan}
                 className="px-4 py-2 rounded-xl bg-[#047857] hover:bg-[#064e3b] text-white text-xs font-semibold shadow-sm"
               >
@@ -433,13 +481,21 @@ export default function AdminDashboard() {
                 {filteredTransaksi.length > 0 ? (
                   filteredTransaksi.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
-                      <td className="p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">{item.id_transaksi || "-"}</td>
-                      <td className="p-3 whitespace-nowrap">{item.tanggal ? String(item.tanggal).split("T")[0] : "-"}</td>
+                      <td className="p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                        {item.id_transaksi || "-"}
+                      </td>
+                      <td className="p-3 whitespace-nowrap">
+                        {item.tanggal ? String(item.tanggal).split("T")[0] : "-"}
+                      </td>
                       <td className="p-3 font-medium text-slate-800">{item.keterangan || "-"}</td>
                       <td className="p-3 whitespace-nowrap">
-                        <span className={`px-2.5 py-1 rounded-full font-semibold text-[10px] ${
-                          String(item.jenis).toLowerCase().includes("masuk") ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
-                        }`}>
+                        <span
+                          className={`px-2.5 py-1 rounded-full font-semibold text-[10px] ${
+                            String(item.jenis).toLowerCase().includes("masuk")
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-rose-100 text-rose-800"
+                          }`}
+                        >
                           {item.jenis || "Masuk"}
                         </span>
                       </td>
@@ -448,12 +504,14 @@ export default function AdminDashboard() {
                       </td>
                       <td className="p-3 text-center space-x-2 whitespace-nowrap">
                         <button
+                          type="button"
                           onClick={() => setEditingTx(item)}
                           className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition shadow-sm"
                         >
                           Edit
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(item.id_transaksi || "")}
                           className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition shadow-sm"
                         >
@@ -473,7 +531,6 @@ export default function AdminDashboard() {
             </table>
           </div>
         </div>
-
       </div>
 
       {/* MODAL EDIT */}
@@ -486,10 +543,10 @@ export default function AdminDashboard() {
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Tanggal</label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : ""}
-                  onChange={(e) => setEditingTx({...editingTx, tanggal: e.target.value})}
+                  onChange={(e) => setEditingTx({ ...editingTx, tanggal: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   required
                 />
@@ -497,10 +554,10 @@ export default function AdminDashboard() {
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Keterangan</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={editingTx.keterangan || ""}
-                  onChange={(e) => setEditingTx({...editingTx, keterangan: e.target.value})}
+                  onChange={(e) => setEditingTx({ ...editingTx, keterangan: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   required
                 />
@@ -509,9 +566,9 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Jenis</label>
-                  <select 
+                  <select
                     value={editingTx.jenis || "masuk"}
-                    onChange={(e) => setEditingTx({...editingTx, jenis: e.target.value})}
+                    onChange={(e) => setEditingTx({ ...editingTx, jenis: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
                   >
                     <option value="masuk">Masuk</option>
@@ -520,10 +577,10 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Nominal (Rp)</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={editingTx.nominal || 0}
-                    onChange={(e) => setEditingTx({...editingTx, nominal: Number(e.target.value)})}
+                    onChange={(e) => setEditingTx({ ...editingTx, nominal: Number(e.target.value) })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
                     required
                   />
@@ -531,14 +588,14 @@ export default function AdminDashboard() {
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-                <button 
+                <button
                   type="button"
                   onClick={() => setEditingTx(null)}
                   className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
                 >
                   Batal
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={savingEdit}
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition disabled:opacity-50"
