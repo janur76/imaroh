@@ -3,10 +3,19 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+function sanitizeNextPath(rawNext: string | null): string {
+  if (!rawNext) return "/admin";
+  const trimmed = rawNext.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return "/admin";
+  }
+  return trimmed.startsWith("/admin") ? trimmed : "/admin";
+}
+
 function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/admin";
+  const nextPath = sanitizeNextPath(searchParams.get("next"));
 
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
