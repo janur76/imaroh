@@ -30,7 +30,8 @@ export default function KajianAdminPage() {
   // State Modal Edit Kajian
   const [editingItem, setEditingItem] = useState<KajianItem | null>(null);
 
-  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
+  const APPS_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
 
   const loadKajian = async () => {
     try {
@@ -46,6 +47,17 @@ export default function KajianAdminPage() {
   useEffect(() => {
     loadKajian();
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (err) {
+      console.error("Gagal logout:", err);
+    } finally {
+      router.replace("/admin/login");
+      router.refresh();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,21 +80,27 @@ export default function KajianAdminPage() {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify(payload),
       });
 
-      alert("Jadwal kajian berhasil ditambahkan!");
+      alert(
+        "Permintaan tambah kajian dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
+          "Periksa Google Sheets sebelum mengirim ulang agar tidak terjadi duplikat."
+      );
       setTanggal("");
       setWaktu("");
       setTema("");
       setPemateri("");
       setTempat("");
-      
+
       setTimeout(() => loadKajian(), 1500);
     } catch (error) {
       console.error("Gagal menyimpan kajian:", error);
-      alert("Terjadi kesalahan sistem.");
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
     } finally {
       setLoading(false);
     }
@@ -107,16 +125,22 @@ export default function KajianAdminPage() {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify(payload),
       });
 
-      alert("Jadwal kajian berhasil diperbarui secara permanen!");
+      alert(
+        "Permintaan perubahan kajian dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
+          "Periksa Google Sheets untuk memastikan data sudah terbarui."
+      );
       setEditingItem(null);
       setTimeout(() => loadKajian(), 1500);
     } catch (error) {
       console.error("Gagal memperbarui kajian:", error);
-      alert("Gagal memperbarui data.");
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
     } finally {
       setSavingEdit(false);
     }
@@ -134,36 +158,53 @@ export default function KajianAdminPage() {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify(payload),
       });
 
-      alert("Jadwal kajian berhasil dihapus!");
+      alert(
+        "Permintaan penghapusan kajian dikirim, tetapi hasilnya belum dapat diverifikasi. " +
+          "Periksa Google Sheets untuk memastikan data sudah terhapus."
+      );
       setTimeout(() => loadKajian(), 1500);
     } catch (error) {
       console.error("Gagal menghapus kajian:", error);
-      alert("Gagal menghapus data.");
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
     }
   };
 
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        
         {/* Top Bar */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <span className="text-xs uppercase font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
               Modul Kajian & Kegiatan
             </span>
-            <h1 className="text-2xl font-extrabold text-[#0b1c30] mt-2">Kelola Jadwal Kajian Masjid</h1>
+            <h1 className="text-2xl font-extrabold text-[#0b1c30] mt-2">
+              Kelola Jadwal Kajian Masjid
+            </h1>
           </div>
-          <button
-            onClick={() => router.push("/admin")}
-            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
-          >
-            ← Kembali ke Dashboard Kas
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/admin")}
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+            >
+              ← Kembali ke Dashboard Kas
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition"
+            >
+              Keluar
+            </button>
+          </div>
         </div>
 
         {/* Form Tambah & Ringkasan */}
@@ -183,7 +224,9 @@ export default function KajianAdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Waktu / Pukul</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Waktu / Pukul
+                  </label>
                   <input
                     type="text"
                     value={waktu}
@@ -195,7 +238,9 @@ export default function KajianAdminPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Tema Kajian</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Tema Kajian
+                </label>
                 <input
                   type="text"
                   value={tema}
@@ -208,7 +253,9 @@ export default function KajianAdminPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Pemateri / Ustadz</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Pemateri / Ustadz
+                  </label>
                   <input
                     type="text"
                     value={pemateri}
@@ -243,16 +290,23 @@ export default function KajianAdminPage() {
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
             <div>
               <h2 className="font-bold text-lg text-[#0b1c30]">Informasi Kajian</h2>
-              <p className="text-xs text-slate-500 mt-1">Total jadwal kajian tercatat di database:</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Total jadwal kajian tercatat di database:
+              </p>
               <div className="mt-6 p-6 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-emerald-800 font-semibold uppercase">Total Jadwal</span>
-                  <h3 className="text-3xl font-extrabold text-emerald-700 mt-1">{kajianList.length} Agenda</h3>
+                  <span className="text-xs text-emerald-800 font-semibold uppercase">
+                    Total Jadwal
+                  </span>
+                  <h3 className="text-3xl font-extrabold text-emerald-700 mt-1">
+                    {kajianList.length} Agenda
+                  </h3>
                 </div>
                 <span className="text-3xl">📅</span>
               </div>
             </div>
             <button
+              type="button"
               onClick={loadKajian}
               className="mt-6 w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition border border-slate-200"
             >
@@ -281,7 +335,9 @@ export default function KajianAdminPage() {
                 {kajianList.length > 0 ? (
                   kajianList.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
-                      <td className="p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">{item.id_kajian || "-"}</td>
+                      <td className="p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                        {item.id_kajian || "-"}
+                      </td>
                       <td className="p-3 whitespace-nowrap font-medium text-slate-800">
                         {item.tanggal ? String(item.tanggal).split("T")[0] : "-"} <br />
                         <span className="text-[10px] text-slate-500">{item.waktu || "-"}</span>
@@ -291,12 +347,14 @@ export default function KajianAdminPage() {
                       <td className="p-3 text-slate-600">{item.tempat || "-"}</td>
                       <td className="p-3 text-center space-x-2 whitespace-nowrap">
                         <button
+                          type="button"
                           onClick={() => setEditingItem(item)}
                           className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition"
                         >
                           Edit
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(item.id_kajian || "")}
                           className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition"
                         >
@@ -316,7 +374,6 @@ export default function KajianAdminPage() {
             </table>
           </div>
         </div>
-
       </div>
 
       {/* MODAL EDIT KAJIAN */}
@@ -350,7 +407,9 @@ export default function KajianAdminPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Tema Kajian</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Tema Kajian
+                </label>
                 <input
                   type="text"
                   value={editingItem.tema || ""}
