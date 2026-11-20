@@ -6,18 +6,20 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/admin")) {
+    const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+    const session = verifySessionToken(token);
+
     if (pathname === "/admin/login") {
-      const existing = verifySessionToken(request.cookies.get(ADMIN_COOKIE_NAME)?.value);
-      if (existing) {
+      if (session) {
         return NextResponse.redirect(new URL("/admin", request.url));
       }
       return NextResponse.next();
     }
 
-    const session = verifySessionToken(request.cookies.get(ADMIN_COOKIE_NAME)?.value);
     if (!session) {
       const loginUrl = new URL("/admin/login", request.url);
-      loginUrl.searchParams.set("next", pathname);
+      const safeNext = pathname.startsWith("/admin") ? pathname : "/admin";
+      loginUrl.searchParams.set("next", safeNext);
       return NextResponse.redirect(loginUrl);
     }
   }
