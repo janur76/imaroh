@@ -6,31 +6,43 @@ import {
   isAllowedAdminEmail,
 } from "@/lib/auth";
 
+interface LoginRequestBody {
+  email?: unknown;
+  credential?: unknown;
+}
+
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { email?: string; credential?: string };
-    let email = (body.email ?? "").trim().toLowerCase();
+    const body = (await request.json()) as LoginRequestBody;
+    const rawEmail = typeof body?.email === "string" ? body.email : "";
+    const credential = typeof body?.credential === "string" ? body.credential.trim() : "";
 
-    if (body.credential) {
+    let email = rawEmail.trim().toLowerCase();
+
+    if (credential) {
       const verifyRes = await fetch(
-        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(body.credential)}`,
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`,
         { cache: "no-store" }
       );
       if (!verifyRes.ok) {
         return NextResponse.json({ error: "Token Google tidak valid." }, { status: 401 });
       }
+
       const tokenInfo = (await verifyRes.json()) as {
         email?: string;
         email_verified?: string;
         aud?: string;
       };
-      const expectedClientId = process.env.AUTH_GOOGLE_ID;
-      if (expectedClientId && tokenInfo.aud && tokenInfo.aud !== expectedClientId) {
+
+      const expectedClientId = process.env.AUTH_GOOGLE_ID?.trim();
+      if (expectedClientId && tokenInfo.aud !== expectedClientId) {
         return NextResponse.json({ error: "Client ID Google tidak cocok." }, { status: 401 });
       }
+
       if (tokenInfo.email_verified !== "true" || !tokenInfo.email) {
         return NextResponse.json({ error: "Email Google belum terverifikasi." }, { status: 401 });
       }
+
       email = tokenInfo.email.trim().toLowerCase();
     }
 
