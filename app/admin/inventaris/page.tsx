@@ -28,7 +28,8 @@ export default function AdminInventaris() {
   // State Modal Edit
   const [editingItem, setEditingItem] = useState<InventarisItem | null>(null);
 
-  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
+  const APPS_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
 
   const loadDataInventaris = async () => {
     try {
@@ -47,6 +48,17 @@ export default function AdminInventaris() {
   useEffect(() => {
     loadDataInventaris();
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (err) {
+      console.error("Gagal logout:", err);
+    } finally {
+      router.replace("/admin/login");
+      router.refresh();
+    }
+  };
 
   const handleTambah = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,17 +80,23 @@ export default function AdminInventaris() {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify(payload),
       });
 
-      alert("Barang inventaris berhasil ditambahkan!");
+      alert(
+        "Permintaan tambah barang dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
+          "Periksa Google Sheets sebelum mengirim ulang agar tidak terjadi duplikat."
+      );
       setNamaBarang("");
       setJumlah("");
       setTimeout(() => loadDataInventaris(), 1500);
     } catch (error) {
       console.error("Gagal menambah inventaris:", error);
-      alert("Terjadi kesalahan sistem.");
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
     } finally {
       setLoading(false);
     }
@@ -102,16 +120,22 @@ export default function AdminInventaris() {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify(payload),
       });
 
-      alert("Inventaris berhasil diperbarui secara permanen!");
+      alert(
+        "Permintaan perubahan inventaris dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
+          "Periksa Google Sheets untuk memastikan data sudah terbarui."
+      );
       setEditingItem(null);
       setTimeout(() => loadDataInventaris(), 1500);
     } catch (error) {
       console.error("Gagal mengupdate inventaris:", error);
-      alert("Gagal memperbarui data.");
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
     } finally {
       setSavingEdit(false);
     }
@@ -129,36 +153,53 @@ export default function AdminInventaris() {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify(payload),
       });
 
-      alert("Barang inventaris berhasil dihapus!");
+      alert(
+        "Permintaan penghapusan barang dikirim, tetapi hasilnya belum dapat diverifikasi. " +
+          "Periksa Google Sheets untuk memastikan data sudah terhapus."
+      );
       setTimeout(() => loadDataInventaris(), 1500);
     } catch (error) {
       console.error("Gagal menghapus inventaris:", error);
-      alert("Gagal menghapus data.");
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
     }
   };
 
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        
         {/* Top Bar */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <span className="text-xs uppercase font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
               Modul Inventaris Masjid
             </span>
-            <h1 className="text-2xl font-extrabold text-[#0b1c30] mt-2">Kelola Aset & Inventaris</h1>
+            <h1 className="text-2xl font-extrabold text-[#0b1c30] mt-2">
+              Kelola Aset & Inventaris
+            </h1>
           </div>
-          <button
-            onClick={() => router.push("/admin")}
-            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
-          >
-            ← Kembali ke Dashboard Kas
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/admin")}
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+            >
+              ← Kembali ke Dashboard Kas
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition"
+            >
+              Keluar
+            </button>
+          </div>
         </div>
 
         {/* Form Tambah & Ringkasan */}
@@ -167,7 +208,9 @@ export default function AdminInventaris() {
             <h2 className="font-bold text-lg text-[#0b1c30] mb-4">Tambah Barang Inventaris</h2>
             <form onSubmit={handleTambah} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Barang</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nama Barang
+                </label>
                 <input
                   type="text"
                   value={namaBarang}
@@ -205,7 +248,9 @@ export default function AdminInventaris() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Lokasi Penyimpanan</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Lokasi Penyimpanan
+                </label>
                 <input
                   type="text"
                   value={lokasi}
@@ -229,16 +274,23 @@ export default function AdminInventaris() {
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
             <div>
               <h2 className="font-bold text-lg text-[#0b1c30]">Informasi Aset</h2>
-              <p className="text-xs text-slate-500 mt-1">Total jenis barang terdaftar di database:</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Total jenis barang terdaftar di database:
+              </p>
               <div className="mt-6 p-6 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-emerald-800 font-semibold uppercase">Total Jenis Barang</span>
-                  <h3 className="text-3xl font-extrabold text-emerald-700 mt-1">{inventarisList.length} Item</h3>
+                  <span className="text-xs text-emerald-800 font-semibold uppercase">
+                    Total Jenis Barang
+                  </span>
+                  <h3 className="text-3xl font-extrabold text-emerald-700 mt-1">
+                    {inventarisList.length} Item
+                  </h3>
                 </div>
                 <span className="text-3xl">📦</span>
               </div>
             </div>
             <button
+              type="button"
               onClick={loadDataInventaris}
               className="mt-6 w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition border border-slate-200"
             >
@@ -267,25 +319,35 @@ export default function AdminInventaris() {
                 {inventarisList.length > 0 ? (
                   inventarisList.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
-                      <td className="p-3 font-mono font-semibold text-emerald-700">{item.id_barang || "-"}</td>
+                      <td className="p-3 font-mono font-semibold text-emerald-700">
+                        {item.id_barang || "-"}
+                      </td>
                       <td className="p-3 font-medium text-slate-900">{item.nama_barang || "-"}</td>
-                      <td className="p-3 text-center font-bold text-slate-800">{item.jumlah || 1}</td>
+                      <td className="p-3 text-center font-bold text-slate-800">
+                        {item.jumlah || 1}
+                      </td>
                       <td className="p-3">
-                        <span className={`px-2.5 py-1 rounded-full font-semibold text-[10px] ${
-                          item.kondisi === "Baik" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                        }`}>
+                        <span
+                          className={`px-2.5 py-1 rounded-full font-semibold text-[10px] ${
+                            item.kondisi === "Baik"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
                           {item.kondisi || "Baik"}
                         </span>
                       </td>
                       <td className="p-3 text-slate-700">{item.lokasi || "-"}</td>
                       <td className="p-3 text-center space-x-2 whitespace-nowrap">
                         <button
+                          type="button"
                           onClick={() => setEditingItem(item)}
                           className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition"
                         >
                           Edit
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(item.id_barang || "")}
                           className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition"
                         >
@@ -305,7 +367,6 @@ export default function AdminInventaris() {
             </table>
           </div>
         </div>
-
       </div>
 
       {/* MODAL EDIT INVENTARIS */}
@@ -317,7 +378,9 @@ export default function AdminInventaris() {
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Nama Barang</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Nama Barang
+                </label>
                 <input
                   type="text"
                   value={editingItem.nama_barang || ""}
@@ -333,7 +396,9 @@ export default function AdminInventaris() {
                   <input
                     type="number"
                     value={editingItem.jumlah || 1}
-                    onChange={(e) => setEditingItem({ ...editingItem, jumlah: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setEditingItem({ ...editingItem, jumlah: Number(e.target.value) })
+                    }
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                     required
                   />
