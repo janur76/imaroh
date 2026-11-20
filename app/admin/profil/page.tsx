@@ -2,7 +2,65 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fetchImarohData } from "@/lib/api";
+import { fetchImarohData, IMAROH_APPS_SCRIPT_URL } from "@/lib/api";
+
+function isValidImageSrc(val: string): boolean {
+  const trimmed = val.trim();
+  if (!trimmed) return false;
+  if (trimmed === "[URL]" || trimmed === "[Gambar QRIS Lokal Terunggah]" || trimmed === "[Gambar Lokal Terunggah]") {
+    return false;
+  }
+  return (
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("data:image/")
+  );
+}
+
+async function compressImageFile(file: File, maxSize: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Gagal membaca file gambar."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Format gambar tidak valid."));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          if (width >= height) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          } else {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas tidak tersedia."));
+          return;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const isPng = file.type === "image/png";
+        const compressed = isPng
+          ? canvas.toDataURL("image/png")
+          : canvas.toDataURL("image/jpeg", 0.82);
+
+        resolve(compressed);
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function AdminProfilPage() {
   const router = useRouter();
@@ -14,21 +72,21 @@ export default function AdminProfilPage() {
   const [qrisUrl, setQrisUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
 
-  const APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
-
   // Muat data profil saat halaman dibuka
   const loadProfil = async () => {
     try {
       const data = await fetchImarohData("profil");
       if (data && data.profil && data.profil.length > 0) {
         const p = data.profil[0];
+        const rawLogo = String(p.logo_url || "").trim();
+        const rawQris = String(p.qris_url || "").trim();
+
         setNamaMasjid(p.nama_masjid || "");
         setAlamat(p.alamat || "");
         setTelepon(p.telepon || "");
         setRunningText(p.running_text || "");
-        setQrisUrl(p.qris_url || "");
-        setLogoUrl(p.logo_url || "");
+        setLogoUrl(isValidImageSrc(rawLogo) ? rawLogo : "");
+        setQrisUrl(isValidImageSrc(rawQris) ? rawQris : "");
       }
     } catch (error) {
       console.error("Gagal memuat profil masjid:", error);
@@ -50,23 +108,38 @@ export default function AdminProfilPage() {
     }
   };
 
-  // Handler khusus untuk upload file lokal dari perangkat (kompresi aman untuk gambar kecil)
-  const handleFileUpload = (
+  // Handler khusus untuk upload file lokal dari perangkat dengan kompresi otomatis
+  const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    setter: (val: string) => void
+    setter: (val: string) => void,
+    maxSize: number,
+    label: string
   ) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 300 * 1024) {
-        alert("Ukuran file disarankan di bawah 300KB agar optimal!");
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert(`Ukuran file ${label} maksimal 2MB.`);
+      e.target.value = "";
+      return;
+    }
+
+    try {
+      const compressedDataUrl = await compressImageFile(file, maxSize);
+      if (compressedDataUrl.length > 48000) {
+        alert(
+          `Ukuran data ${label} setelah dikompresi masih terlalu besar untuk sel Google Sheets. ` +
+            "Gunakan ukuran gambar lebih kecil atau masukkan URL gambar langsung."
+        );
+        e.target.value = "";
         return;
       }
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setter(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setter(compressedDataUrl);
+    } catch (error) {
+      console.error(`Gagal memproses ${label}:`, error);
+      alert(`Gagal memproses gambar ${label}. Pastikan file PNG/JPG valid.`);
+    } finally {
+      e.target.value = "";
     }
   };
 
@@ -74,18 +147,21 @@ export default function AdminProfilPage() {
     e.preventDefault();
     setLoading(true);
 
+    const cleanLogo = isValidImageSrc(logoUrl) ? logoUrl.trim() : "";
+    const cleanQris = isValidImageSrc(qrisUrl) ? qrisUrl.trim() : "";
+
     try {
       const payload = {
         action: "updateProfil",
-        nama_masjid: namaMasjid,
-        alamat: alamat,
-        telepon: telepon,
-        running_text: runningText,
-        qris_url: qrisUrl,
-        logo_url: logoUrl,
+        nama_masjid: namaMasjid.trim(),
+        alamat: alamat.trim(),
+        telepon: telepon.trim(),
+        running_text: runningText.trim(),
+        qris_url: cleanQris,
+        logo_url: cleanLogo,
       };
 
-      await fetch(APPS_SCRIPT_URL, {
+      await fetch(IMAROH_APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
         headers: {
@@ -96,12 +172,12 @@ export default function AdminProfilPage() {
 
       alert(
         "Permintaan pembaruan profil dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
-          "Periksa Google Sheets untuk memastikan data profil, logo, dan QRIS sudah terbarui."
+          "Periksa Google Sheets dan tekan F5 setelah beberapa detik untuk memastikan logo & QRIS tersimpan."
       );
 
       setTimeout(() => {
         loadProfil();
-      }, 1500);
+      }, 2000);
     } catch (error) {
       console.error("Gagal menyimpan profil:", error);
       alert(
@@ -112,6 +188,9 @@ export default function AdminProfilPage() {
       setLoading(false);
     }
   };
+
+  const logoPreviewValid = isValidImageSrc(logoUrl);
+  const qrisPreviewValid = isValidImageSrc(qrisUrl);
 
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
@@ -167,12 +246,23 @@ export default function AdminProfilPage() {
 
             {/* Bagian Upload & Preview Logo Masjid */}
             <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                Logo Masjid (PNG Transparan)
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Logo Masjid (PNG Transparan)
+                </label>
+                {logoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setLogoUrl("")}
+                    className="text-[11px] font-semibold text-rose-600 hover:text-rose-700"
+                  >
+                    Hapus Logo
+                  </button>
+                )}
+              </div>
               <div className="flex flex-col sm:flex-row items-center gap-4">
                 <div className="w-20 h-20 rounded-2xl bg-white border border-slate-300 flex items-center justify-center p-2 shadow-inner overflow-hidden flex-shrink-0">
-                  {logoUrl && logoUrl.trim() !== "" ? (
+                  {logoPreviewValid ? (
                     <img
                       src={logoUrl}
                       alt="Preview Logo"
@@ -186,18 +276,23 @@ export default function AdminProfilPage() {
                   <input
                     type="file"
                     accept="image/png, image/jpeg"
-                    onChange={(e) => handleFileUpload(e, setLogoUrl)}
+                    onChange={(e) => handleFileUpload(e, setLogoUrl, 360, "Logo Masjid")}
                     className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-[#047857] hover:file:bg-emerald-100 cursor-pointer"
                   />
                   <input
                     type="text"
                     value={logoUrl.startsWith("data:") ? "[Gambar Lokal Terunggah]" : logoUrl}
-                    onChange={(e) => setLogoUrl(e.target.value)}
-                    placeholder="Atau masukkan URL / link gambar langsung di sini..."
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val !== "[Gambar Lokal Terunggah]") {
+                        setLogoUrl(val);
+                      }
+                    }}
+                    placeholder="Atau masukkan URL / link gambar langsung (https://...)..."
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#047857]"
                   />
                   <p className="text-[11px] text-slate-500">
-                    Pilih file langsung dari perangkat atau masukkan tautan URL.
+                    Pilih file langsung dari perangkat (otomatis dikompresi) atau masukkan tautan URL.
                   </p>
                 </div>
               </div>
@@ -233,12 +328,23 @@ export default function AdminProfilPage() {
 
               {/* Bagian Upload & Preview QRIS Donasi */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Gambar / QRIS Donasi
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Gambar / QRIS Donasi
+                  </label>
+                  {qrisUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setQrisUrl("")}
+                      className="text-[11px] font-semibold text-rose-600 hover:text-rose-700"
+                    >
+                      Hapus QRIS
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-3">
                   <div className="w-16 h-16 rounded-xl bg-white border border-slate-300 flex items-center justify-center p-1 overflow-hidden flex-shrink-0 shadow-inner">
-                    {qrisUrl && qrisUrl.trim() !== "" ? (
+                    {qrisPreviewValid ? (
                       <img src={qrisUrl} alt="QRIS" className="w-full h-full object-contain" />
                     ) : (
                       <span className="text-lg">💳</span>
@@ -248,14 +354,19 @@ export default function AdminProfilPage() {
                     <input
                       type="file"
                       accept="image/png, image/jpeg"
-                      onChange={(e) => handleFileUpload(e, setQrisUrl)}
+                      onChange={(e) => handleFileUpload(e, setQrisUrl, 520, "QRIS Donasi")}
                       className="w-full text-xs text-slate-500 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 cursor-pointer"
                     />
                     <input
                       type="text"
                       value={qrisUrl.startsWith("data:") ? "[Gambar QRIS Lokal Terunggah]" : qrisUrl}
-                      onChange={(e) => setQrisUrl(e.target.value)}
-                      placeholder="Atau URL QRIS..."
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val !== "[Gambar QRIS Lokal Terunggah]") {
+                          setQrisUrl(val);
+                        }
+                      }}
+                      placeholder="Atau URL QRIS (https://...)..."
                       className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#047857]"
                     />
                   </div>
