@@ -7,7 +7,11 @@ import { fetchImarohData, IMAROH_APPS_SCRIPT_URL } from "@/lib/api";
 function isValidImageSrc(val: string): boolean {
   const trimmed = val.trim();
   if (!trimmed) return false;
-  if (trimmed === "[URL]" || trimmed === "[Gambar QRIS Lokal Terunggah]" || trimmed === "[Gambar Lokal Terunggah]") {
+  if (
+    trimmed === "[URL]" ||
+    trimmed === "[Gambar QRIS Lokal Terunggah]" ||
+    trimmed === "[Gambar Lokal Terunggah]"
+  ) {
     return false;
   }
   return (
@@ -18,7 +22,12 @@ function isValidImageSrc(val: string): boolean {
   );
 }
 
-async function compressImageFile(file: File, maxSize: number): Promise<string> {
+async function compressImageFile(
+  file: File,
+  options: { maxSize: number; preferPng?: boolean; maxChars?: number }
+): Promise<string> {
+  const { maxSize, preferPng = false, maxChars = 46000 } = options;
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Gagal membaca file gambar."));
@@ -26,35 +35,66 @@ async function compressImageFile(file: File, maxSize: number): Promise<string> {
       const img = new Image();
       img.onerror = () => reject(new Error("Format gambar tidak valid."));
       img.onload = () => {
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          if (width >= height) {
-            height = Math.round((height * maxSize) / width);
-            width = maxSize;
-          } else {
-            width = Math.round((width * maxSize) / height);
-            height = maxSize;
+        const renderToDataUrl = (targetMax: number, mime: string, quality?: number) => {
+          let { width, height } = img;
+          if (width > targetMax || height > targetMax) {
+            if (width >= height) {
+              height = Math.round((height * targetMax) / width);
+              width = targetMax;
+            } else {
+              width = Math.round((width * targetMax) / height);
+              height = targetMax;
+            }
           }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, width);
+          canvas.height = Math.max(1, height);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            throw new Error("Canvas tidak tersedia.");
+          }
+
+          if (mime === "image/jpeg") {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+          }
+
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          return quality !== undefined
+            ? canvas.toDataURL(mime, quality)
+            : canvas.toDataURL(mime);
+        };
+
+        try {
+          if (preferPng && file.type === "image/png") {
+            const pngResult = renderToDataUrl(maxSize, "image/png");
+            if (pngResult.length <= maxChars) {
+              resolve(pngResult);
+              return;
+            }
+          }
+
+          const sizes = [maxSize, 420, 340, 280];
+          const qualities = [0.75, 0.6, 0.48];
+
+          for (const sz of sizes) {
+            for (const q of qualities) {
+              const candidate = renderToDataUrl(sz, "image/jpeg", q);
+              if (candidate.length <= maxChars) {
+                resolve(candidate);
+                return;
+              }
+            }
+          }
+
+          const fallback = renderToDataUrl(260, "image/jpeg", 0.45);
+          resolve(fallback);
+        } catch (err) {
+          reject(err);
         }
-
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, width);
-        canvas.height = Math.max(1, height);
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("Canvas tidak tersedia."));
-          return;
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        const isPng = file.type === "image/png";
-        const compressed = isPng
-          ? canvas.toDataURL("image/png")
-          : canvas.toDataURL("image/jpeg", 0.82);
-
-        resolve(compressed);
       };
       img.src = String(reader.result || "");
     };
@@ -108,36 +148,41 @@ export default function AdminProfilPage() {
     }
   };
 
-  // Handler khusus untuk upload file lokal dari perangkat dengan kompresi otomatis
+  // Handler khusus untuk upload file lokal dari perangkat dengan kompresi adaptif
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (val: string) => void,
-    maxSize: number,
-    label: string
+    options: { maxSize: number; preferPng?: boolean; label: string }
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert(`Ukuran file ${label} maksimal 2MB.`);
+    if (file.size > 4 * 1024 * 1024) {
+      alert(`Ukuran file ${options.label} maksimal 4MB.`);
       e.target.value = "";
       return;
     }
 
     try {
-      const compressedDataUrl = await compressImageFile(file, maxSize);
-      if (compressedDataUrl.length > 48000) {
+      const compressedDataUrl = await compressImageFile(file, {
+        maxSize: options.maxSize,
+        preferPng: options.preferPng,
+        maxChars: 46000,
+      });
+
+      if (compressedDataUrl.length > 48500) {
         alert(
-          `Ukuran data ${label} setelah dikompresi masih terlalu besar untuk sel Google Sheets. ` +
-            "Gunakan ukuran gambar lebih kecil atau masukkan URL gambar langsung."
+          `Data ${options.label} masih terlalu padat untuk sel Google Sheets. ` +
+            "Sebaiknya masukkan URL gambar langsung (https://...)."
         );
         e.target.value = "";
         return;
       }
+
       setter(compressedDataUrl);
     } catch (error) {
-      console.error(`Gagal memproses ${label}:`, error);
-      alert(`Gagal memproses gambar ${label}. Pastikan file PNG/JPG valid.`);
+      console.error(`Gagal memproses ${options.label}:`, error);
+      alert(`Gagal memproses gambar ${options.label}. Pastikan file PNG/JPG valid.`);
     } finally {
       e.target.value = "";
     }
@@ -276,7 +321,13 @@ export default function AdminProfilPage() {
                   <input
                     type="file"
                     accept="image/png, image/jpeg"
-                    onChange={(e) => handleFileUpload(e, setLogoUrl, 360, "Logo Masjid")}
+                    onChange={(e) =>
+                      handleFileUpload(e, setLogoUrl, {
+                        maxSize: 320,
+                        preferPng: true,
+                        label: "Logo Masjid",
+                      })
+                    }
                     className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-[#047857] hover:file:bg-emerald-100 cursor-pointer"
                   />
                   <input
@@ -354,7 +405,13 @@ export default function AdminProfilPage() {
                     <input
                       type="file"
                       accept="image/png, image/jpeg"
-                      onChange={(e) => handleFileUpload(e, setQrisUrl, 520, "QRIS Donasi")}
+                      onChange={(e) =>
+                        handleFileUpload(e, setQrisUrl, {
+                          maxSize: 480,
+                          preferPng: false,
+                          label: "QRIS Donasi",
+                        })
+                      }
                       className="w-full text-xs text-slate-500 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 cursor-pointer"
                     />
                     <input
