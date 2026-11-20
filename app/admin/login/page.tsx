@@ -1,97 +1,120 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-export default function AdminLoginPage() {
-  const [email, setEmail] = useState('didikyuliono@gmail.com');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+function LoginFormContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next") || "/admin";
+
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setErrorMsg("");
 
-    setTimeout(() => {
-      setLoading(false);
-      router.push('/admin'); 
-    }, 1000);
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setErrorMsg("Masukkan alamat email pengurus yang terdaftar.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+
+      if (!res.ok || !data.ok) {
+        setErrorMsg(data.error || "Login gagal. Periksa izin akun pengurus.");
+        return;
+      }
+
+      router.replace(nextPath);
+      router.refresh();
+    } catch (err) {
+      console.error("Gagal login:", err);
+      setErrorMsg("Terjadi gangguan jaringan saat login.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-tr from-emerald-950 via-emerald-800 to-teal-900 px-4 relative overflow-hidden">
-      
-      {/* Efek Cahaya Latar Belakang (Ambient Glow) */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-teal-400/20 rounded-full blur-3xl pointer-events-none"></div>
-
-      {/* Kotak Glassmorphism yang Berkilau */}
-      <div className="w-full max-w-md p-8 rounded-3xl bg-white/[0.12] backdrop-blur-2xl border border-white/30 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] text-white relative z-10">
-        
-        {/* Header / Badge */}
-        <div className="text-center mb-6">
-          <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-white/20 text-emerald-100 border border-white/30 mb-3 shadow-inner">
-            AUTENTIKASI DKM
+    <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-8 space-y-6">
+        <div>
+          <span className="text-xs uppercase tracking-wider font-semibold text-[#047857] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+            Autentikasi Pengurus DKM
           </span>
-          <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-md">
-            Login Pengurus Imaroh
+          <h1 className="text-2xl font-extrabold text-[#0b1c30] mt-3">
+            Login Panel Admin
           </h1>
-          <p className="text-xs text-emerald-100/90 mt-1">
-            Masukkan email dan password terdaftar di database Google Sheets untuk mengakses panel admin.
+          <p className="text-xs text-slate-500 mt-1">
+            Akses khusus email pengurus yang terdaftar pada konfigurasi server <strong>imaroh.kalibu.id</strong>.
           </p>
         </div>
 
-        {/* Form Login */}
+        {errorMsg && (
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+            {errorMsg}
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-emerald-100 mb-1">
-              Email Pengurus / Superadmin
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Email Pengurus
             </label>
-            <input 
-              type="email" 
+            <input
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="pengurus@gmail.com"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
               required
-              className="w-full px-4 py-2.5 rounded-xl bg-black/30 border border-white/25 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm shadow-inner transition-all"
-              placeholder="email@domain.com"
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-emerald-100 mb-1">
-              Password
-            </label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              className="w-full px-4 py-2.5 rounded-xl bg-black/30 border border-white/25 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm shadow-inner transition-all"
-            />
-          </div>
-
-          <button 
+          <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl font-semibold bg-emerald-500 hover:bg-emerald-400 text-emerald-950 transition-all shadow-lg shadow-emerald-950/50 border border-white/40 text-sm mt-2 disabled:opacity-50 font-bold tracking-wide"
+            disabled={submitting}
+            className="w-full py-3 px-4 rounded-xl bg-[#047857] hover:bg-[#064e3b] text-white font-semibold text-sm transition shadow-md disabled:opacity-50"
           >
-            {loading ? 'Memproses...' : 'Masuk ke Panel Admin'}
+            {submitting ? "Memverifikasi Akses..." : "Masuk ke Dashboard"}
           </button>
         </form>
 
-        {/* Footer Link */}
-        <div className="text-center mt-6">
-          <a 
-            href="/" 
-            className="text-xs text-emerald-200 hover:text-white transition-colors underline underline-offset-4"
+        <div className="pt-4 border-t border-slate-100 flex justify-between items-center text-xs">
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="text-slate-500 hover:text-slate-800 font-medium"
           >
-            ← Kembali ke Portal Publik Jamaah
-          </a>
+            ← Kembali ke Halaman Publik
+          </button>
         </div>
-
       </div>
-    </div>
+    </main>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#f8f9ff] flex items-center justify-center text-xs text-slate-500">
+          Memuat halaman login...
+        </main>
+      }
+    >
+      <LoginFormContent />
+    </Suspense>
   );
 }
