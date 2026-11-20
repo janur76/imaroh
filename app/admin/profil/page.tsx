@@ -14,7 +14,8 @@ export default function AdminProfilPage() {
   const [qrisUrl, setQrisUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
 
-  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
+  const APPS_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
 
   // Muat data profil saat halaman dibuka
   const loadProfil = async () => {
@@ -38,8 +39,22 @@ export default function AdminProfilPage() {
     loadProfil();
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (err) {
+      console.error("Gagal logout:", err);
+    } finally {
+      router.replace("/admin/login");
+      router.refresh();
+    }
+  };
+
   // Handler khusus untuk upload file lokal dari perangkat (kompresi aman untuk gambar kecil)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+  const handleFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (val: string) => void
+  ) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 300 * 1024) {
@@ -74,19 +89,25 @@ export default function AdminProfilPage() {
         method: "POST",
         mode: "no-cors",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "text/plain;charset=UTF-8",
         },
         body: JSON.stringify(payload),
       });
 
-      alert("Berhasil! Profil, Logo, dan QRIS masjid telah diperbarui ke Google Sheets.");
-      
+      alert(
+        "Permintaan pembaruan profil dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
+          "Periksa Google Sheets untuk memastikan data profil, logo, dan QRIS sudah terbarui."
+      );
+
       setTimeout(() => {
         loadProfil();
       }, 1500);
     } catch (error) {
       console.error("Gagal menyimpan profil:", error);
-      alert("Terjadi kesalahan saat menyimpan ke database.");
+      alert(
+        "Permintaan gagal atau hasilnya tidak diketahui. " +
+          "Periksa Google Sheets sebelum mencoba lagi."
+      );
     } finally {
       setLoading(false);
     }
@@ -95,7 +116,6 @@ export default function AdminProfilPage() {
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
-        
         {/* Top Header */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -109,21 +129,32 @@ export default function AdminProfilPage() {
               Kelola identitas, logo transparan, QRIS donasi, dan running text beranda.
             </p>
           </div>
-          
-          <button
-            onClick={() => router.push("/admin")}
-            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition duration-200 shadow-sm"
-          >
-            ← Kembali ke Dashboard
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/admin")}
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition duration-200 shadow-sm"
+            >
+              ← Kembali ke Dashboard
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition duration-200 shadow-sm"
+            >
+              Keluar
+            </button>
+          </div>
         </div>
 
         {/* Form Pengaturan Profil */}
         <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
           <form onSubmit={handleSave} className="space-y-6">
-            
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Resmi Masjid</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Nama Resmi Masjid
+              </label>
               <input
                 type="text"
                 value={namaMasjid}
@@ -136,11 +167,17 @@ export default function AdminProfilPage() {
 
             {/* Bagian Upload & Preview Logo Masjid */}
             <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">Logo Masjid (PNG Transparan)</label>
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Logo Masjid (PNG Transparan)
+              </label>
               <div className="flex flex-col sm:flex-row items-center gap-4">
                 <div className="w-20 h-20 rounded-2xl bg-white border border-slate-300 flex items-center justify-center p-2 shadow-inner overflow-hidden flex-shrink-0">
                   {logoUrl && logoUrl.trim() !== "" ? (
-                    <img src={logoUrl} alt="Preview Logo" className="w-full h-full object-contain" />
+                    <img
+                      src={logoUrl}
+                      alt="Preview Logo"
+                      className="w-full h-full object-contain"
+                    />
                   ) : (
                     <span className="text-2xl">🕌</span>
                   )}
@@ -159,13 +196,17 @@ export default function AdminProfilPage() {
                     placeholder="Atau masukkan URL / link gambar langsung di sini..."
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#047857]"
                   />
-                  <p className="text-[11px] text-slate-500">Pilih file langsung dari perangkat atau masukkan tautan URL.</p>
+                  <p className="text-[11px] text-slate-500">
+                    Pilih file langsung dari perangkat atau masukkan tautan URL.
+                  </p>
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Alamat Lengkap</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Alamat Lengkap
+              </label>
               <textarea
                 value={alamat}
                 onChange={(e) => setAlamat(e.target.value)}
@@ -178,7 +219,9 @@ export default function AdminProfilPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor Telepon / Kontak DKM</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nomor Telepon / Kontak DKM
+                </label>
                 <input
                   type="text"
                   value={telepon}
@@ -190,7 +233,9 @@ export default function AdminProfilPage() {
 
               {/* Bagian Upload & Preview QRIS Donasi */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Gambar / QRIS Donasi</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Gambar / QRIS Donasi
+                </label>
                 <div className="flex items-center gap-3">
                   <div className="w-16 h-16 rounded-xl bg-white border border-slate-300 flex items-center justify-center p-1 overflow-hidden flex-shrink-0 shadow-inner">
                     {qrisUrl && qrisUrl.trim() !== "" ? (
@@ -219,7 +264,9 @@ export default function AdminProfilPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Running Text Beranda (Pesan Berjalan untuk Jamaah)</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Running Text Beranda (Pesan Berjalan untuk Jamaah)
+              </label>
               <input
                 type="text"
                 value={runningText}
@@ -236,10 +283,8 @@ export default function AdminProfilPage() {
             >
               {loading ? "Menyimpan ke Sheets..." : "Simpan Perubahan Profil ke Sheets"}
             </button>
-
           </form>
         </div>
-
       </div>
     </main>
   );
