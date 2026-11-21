@@ -14,6 +14,27 @@ interface KajianItem {
   [key: string]: any;
 }
 
+async function postImarohAction(payload: Record<string, unknown>) {
+  const res = await fetch("/api/imaroh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await res.json()) as {
+    ok?: boolean;
+    error?: string;
+    message?: string;
+    id?: string;
+  };
+
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Gagal menyimpan jadwal kajian ke Google Sheets.");
+  }
+
+  return data;
+}
+
 export default function KajianAdminPage() {
   const router = useRouter();
   const [kajianList, setKajianList] = useState<KajianItem[]>([]);
@@ -29,9 +50,6 @@ export default function KajianAdminPage() {
 
   // State Modal Edit Kajian
   const [editingItem, setEditingItem] = useState<KajianItem | null>(null);
-
-  const APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
 
   const loadKajian = async () => {
     try {
@@ -68,39 +86,26 @@ export default function KajianAdminPage() {
 
     setLoading(true);
     try {
-      const payload = {
+      const res = await postImarohAction({
         action: "tambahKajian",
         tanggal: tanggal,
         waktu: waktu || "Ba'da Isya'",
         tema: tema,
         pemateri: pemateri,
         tempat: tempat || "Masjid Baitul Mu'minin",
-      };
-
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify(payload),
       });
 
-      alert(
-        "Permintaan tambah kajian dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
-          "Periksa Google Sheets sebelum mengirim ulang agar tidak terjadi duplikat."
-      );
+      alert(res.message || "Jadwal kajian berhasil ditambahkan ke Google Sheets.");
       setTanggal("");
       setWaktu("");
       setTema("");
       setPemateri("");
       setTempat("");
 
-      setTimeout(() => loadKajian(), 1500);
+      await loadKajian();
     } catch (error) {
       console.error("Gagal menyimpan kajian:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal menyimpan jadwal kajian.");
     } finally {
       setLoading(false);
     }
@@ -112,7 +117,7 @@ export default function KajianAdminPage() {
 
     setSavingEdit(true);
     try {
-      const payload = {
+      const res = await postImarohAction({
         action: "editKajian",
         id_kajian: editingItem.id_kajian,
         tanggal: editingItem.tanggal ? String(editingItem.tanggal).split("T")[0] : "",
@@ -120,27 +125,14 @@ export default function KajianAdminPage() {
         tema: editingItem.tema,
         pemateri: editingItem.pemateri,
         tempat: editingItem.tempat,
-      };
-
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify(payload),
       });
 
-      alert(
-        "Permintaan perubahan kajian dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
-          "Periksa Google Sheets untuk memastikan data sudah terbarui."
-      );
+      alert(res.message || "Jadwal kajian berhasil diperbarui.");
       setEditingItem(null);
-      setTimeout(() => loadKajian(), 1500);
+      await loadKajian();
     } catch (error) {
       console.error("Gagal memperbarui kajian:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal memperbarui jadwal kajian.");
     } finally {
       setSavingEdit(false);
     }
@@ -150,29 +142,16 @@ export default function KajianAdminPage() {
     if (!confirm(`Yakin ingin menghapus jadwal kajian dengan ID ${id_kajian}?`)) return;
 
     try {
-      const payload = {
+      const res = await postImarohAction({
         action: "hapusKajian",
         id_kajian: id_kajian,
-      };
-
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify(payload),
       });
 
-      alert(
-        "Permintaan penghapusan kajian dikirim, tetapi hasilnya belum dapat diverifikasi. " +
-          "Periksa Google Sheets untuk memastikan data sudah terhapus."
-      );
-      setTimeout(() => loadKajian(), 1500);
+      alert(res.message || "Jadwal kajian berhasil dihapus.");
+      await loadKajian();
     } catch (error) {
       console.error("Gagal menghapus kajian:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal menghapus jadwal kajian.");
     }
   };
 
