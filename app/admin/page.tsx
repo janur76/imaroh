@@ -315,43 +315,9 @@ export default function AdminDashboard() {
 
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8 print:bg-white print:p-0">
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 12mm;
-          }
-          body {
-            background: #ffffff !important;
-            color: #0f172a !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .print-header-a4 {
-            display: block !important;
-          }
-          .print-kas-only {
-            padding: 0 !important;
-            margin: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            background: #ffffff !important;
-          }
-          .print-table-wrap {
-            overflow: visible !important;
-          }
-        }
-        .print-header-a4 {
-          display: none;
-        }
-      `}</style>
-
       <div className="max-w-7xl mx-auto space-y-6 print:max-w-full print:space-y-3">
         {/* Top Bar Admin */}
-        <div className="no-print bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="print:hidden bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <span className="text-xs uppercase tracking-wider font-semibold text-[#047857] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
               Panel Superadmin DKM
@@ -402,7 +368,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* KPI Cards */}
-        <div className="no-print grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="print:hidden grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-gradient-to-br from-[#064e3b] to-[#003527] text-white p-6 rounded-2xl shadow-md">
             <span className="text-xs text-[#b0f0d6] uppercase font-semibold">Total Saldo Kas</span>
             <h3 className="text-3xl font-extrabold mt-2">
@@ -424,7 +390,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Form & Status Grid */}
-        <div className="no-print grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="print:hidden grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="font-bold text-lg text-[#0b1c30] mb-4">Catat Transaksi Kas Baru</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -499,9 +465,9 @@ export default function AdminDashboard() {
         </div>
 
         {/* Tabel Riwayat Mutasi Kas */}
-        <div className="print-kas-only bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4 print:p-0 print:border-0 print:shadow-none print:bg-white">
           {/* Kop Cetak A4 (Logo Kiri Atas + Judul + Alamat + Periode/Kategori) */}
-          <div className="print-header-a4 space-y-2 mb-3">
+          <div className="hidden print:block space-y-2 mb-3">
             <div className="flex items-center justify-between text-[10px] text-slate-500">
               <span>{printMeta.stamp}</span>
               <span className="font-mono">{printMeta.code}</span>
@@ -535,12 +501,12 @@ export default function AdminDashboard() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h2 className="font-bold text-lg text-[#0b1c30]">Riwayat Mutasi & Laporan Kas</h2>
-              <p className="no-print text-xs text-slate-500">
+              <p className="print:hidden text-xs text-slate-500">
                 Filter transaksi berdasarkan bulan dan jenis pengeluaran/pemasukan.
               </p>
             </div>
 
-            <div className="no-print flex flex-wrap items-center gap-3">
+            <div className="print:hidden flex flex-wrap items-center gap-3">
               <select
                 value={filterBulan}
                 onChange={(e) => setFilterBulan(e.target.value)}
@@ -586,7 +552,7 @@ export default function AdminDashboard() {
             </span>
           </div>
 
-          <div className="overflow-x-auto print-table-wrap">
+          <div className="overflow-x-auto print:overflow-visible">
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200 print:bg-white">
                 <tr>
@@ -595,7 +561,7 @@ export default function AdminDashboard() {
                   <th className="p-3">Keterangan</th>
                   <th className="p-3">Jenis</th>
                   <th className="p-3 text-right">Nominal (Rp)</th>
-                  <th className="no-print p-3 text-center">Aksi</th>
+                  <th className="print:hidden p-3 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -632,7 +598,7 @@ export default function AdminDashboard() {
                       <td className="p-3 text-right font-bold text-slate-800 whitespace-nowrap">
                         Rp {Number(item.nominal || 0).toLocaleString("id-ID")}
                       </td>
-                      <td className="no-print p-3 text-center space-x-2 whitespace-nowrap">
+                      <td className="print:hidden p-3 text-center space-x-2 whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => setEditingTx(item)}
@@ -665,7 +631,7 @@ export default function AdminDashboard() {
 
       {/* MODAL EDIT */}
       {editingTx && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="print:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-slate-800">
             <h3 className="text-lg font-bold text-[#0b1c30] mb-1">Edit Transaksi</h3>
             <p className="text-xs text-slate-500 mb-4 font-mono">ID: {editingTx.id_transaksi}</p>
