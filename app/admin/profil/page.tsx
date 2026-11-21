@@ -4,8 +4,17 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
-function isValidImageSrc(val: string): boolean {
-  const trimmed = val.trim();
+function safeStr(val: unknown): string {
+  if (val === null || val === undefined) return "";
+  return String(val);
+}
+
+function safeTrim(val: unknown): string {
+  return safeStr(val).trim();
+}
+
+function isValidImageSrc(val: unknown): boolean {
+  const trimmed = safeTrim(val);
   if (!trimmed) return false;
   if (
     trimmed === "[URL]" ||
@@ -96,7 +105,7 @@ async function compressImageFile(
           reject(err);
         }
       };
-      img.src = String(reader.result || "");
+      img.src = safeStr(reader.result);
     };
     reader.readAsDataURL(file);
   });
@@ -117,7 +126,7 @@ async function postImarohAction(payload: Record<string, unknown>) {
   };
 
   if (!res.ok || !data.ok) {
-    throw new Error(data.error || "Gagal memperbarui profil masjid ke Google Sheets.");
+    throw new Error(safeTrim(data.error) || "Gagal memperbarui profil masjid ke Google Sheets.");
   }
 
   return data;
@@ -137,15 +146,15 @@ export default function AdminProfilPage() {
   const loadProfil = async () => {
     try {
       const data = await fetchImarohData("profil");
-      if (data && data.profil && data.profil.length > 0) {
+      if (data && Array.isArray(data.profil) && data.profil.length > 0) {
         const p = data.profil[0];
-        const rawLogo = String(p.logo_url || "").trim();
-        const rawQris = String(p.qris_url || "").trim();
+        const rawLogo = safeTrim(p?.logo_url);
+        const rawQris = safeTrim(p?.qris_url);
 
-        setNamaMasjid(p.nama_masjid || "");
-        setAlamat(p.alamat || "");
-        setTelepon(p.telepon || "");
-        setRunningText(p.running_text || "");
+        setNamaMasjid(safeStr(p?.nama_masjid));
+        setAlamat(safeStr(p?.alamat));
+        setTelepon(safeStr(p?.telepon));
+        setRunningText(safeStr(p?.running_text));
         setLogoUrl(isValidImageSrc(rawLogo) ? rawLogo : "");
         setQrisUrl(isValidImageSrc(rawQris) ? rawQris : "");
       }
@@ -212,8 +221,10 @@ export default function AdminProfilPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const cleanLogo = isValidImageSrc(logoUrl) ? logoUrl.trim() : "";
-    const cleanQris = isValidImageSrc(qrisUrl) ? qrisUrl.trim() : "";
+    const cleanLogoStr = safeStr(logoUrl);
+    const cleanQrisStr = safeStr(qrisUrl);
+    const cleanLogo = isValidImageSrc(cleanLogoStr) ? safeTrim(cleanLogoStr) : "";
+    const cleanQris = isValidImageSrc(cleanQrisStr) ? safeTrim(cleanQrisStr) : "";
 
     if (cleanLogo.length > 48500) {
       alert("Data Logo Masjid terlalu panjang untuk sel Google Sheets. Gunakan URL/path gambar.");
@@ -229,16 +240,16 @@ export default function AdminProfilPage() {
     try {
       const payload = {
         action: "updateProfil",
-        nama_masjid: namaMasjid.trim(),
-        alamat: alamat.trim(),
-        telepon: telepon.trim(),
-        running_text: runningText.trim(),
+        nama_masjid: safeTrim(namaMasjid),
+        alamat: safeTrim(alamat),
+        telepon: safeTrim(telepon),
+        running_text: safeTrim(runningText),
         qris_url: cleanQris,
         logo_url: cleanLogo,
       };
 
       const res = await postImarohAction(payload);
-      alert(res.message || "Profil masjid berhasil diperbarui ke Google Sheets.");
+      alert(safeTrim(res.message) || "Profil masjid berhasil diperbarui ke Google Sheets.");
       await loadProfil();
     } catch (error) {
       console.error("Gagal menyimpan profil:", error);
@@ -248,8 +259,10 @@ export default function AdminProfilPage() {
     }
   };
 
-  const logoPreviewValid = isValidImageSrc(logoUrl);
-  const qrisPreviewValid = isValidImageSrc(qrisUrl);
+  const strLogo = safeStr(logoUrl);
+  const strQris = safeStr(qrisUrl);
+  const logoPreviewValid = isValidImageSrc(strLogo);
+  const qrisPreviewValid = isValidImageSrc(strQris);
 
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
@@ -295,7 +308,7 @@ export default function AdminProfilPage() {
               </label>
               <input
                 type="text"
-                value={namaMasjid}
+                value={safeStr(namaMasjid)}
                 onChange={(e) => setNamaMasjid(e.target.value)}
                 placeholder="Contoh: Masjid Baitul Mu'minin"
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
@@ -309,7 +322,7 @@ export default function AdminProfilPage() {
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
                   Logo Masjid (PNG Transparan)
                 </label>
-                {logoUrl && (
+                {strLogo && (
                   <button
                     type="button"
                     onClick={() => setLogoUrl("")}
@@ -323,7 +336,7 @@ export default function AdminProfilPage() {
                 <div className="w-20 h-20 rounded-2xl bg-white border border-slate-300 flex items-center justify-center p-2 shadow-inner overflow-hidden flex-shrink-0">
                   {logoPreviewValid ? (
                     <img
-                      src={logoUrl}
+                      src={strLogo}
                       alt="Preview Logo"
                       className="w-full h-full object-contain"
                     />
@@ -346,7 +359,7 @@ export default function AdminProfilPage() {
                   />
                   <input
                     type="text"
-                    value={logoUrl.startsWith("data:") ? "[Gambar Lokal Terunggah]" : logoUrl}
+                    value={strLogo.startsWith("data:") ? "[Gambar Lokal Terunggah]" : strLogo}
                     onChange={(e) => {
                       const val = e.target.value;
                       if (val !== "[Gambar Lokal Terunggah]") {
@@ -368,7 +381,7 @@ export default function AdminProfilPage() {
                 Alamat Lengkap
               </label>
               <textarea
-                value={alamat}
+                value={safeStr(alamat)}
                 onChange={(e) => setAlamat(e.target.value)}
                 rows={3}
                 placeholder="Masukkan alamat lengkap masjid..."
@@ -384,7 +397,7 @@ export default function AdminProfilPage() {
                 </label>
                 <input
                   type="text"
-                  value={telepon}
+                  value={safeStr(telepon)}
                   onChange={(e) => setTelepon(e.target.value)}
                   placeholder="Contoh: 081234567890"
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
@@ -397,7 +410,7 @@ export default function AdminProfilPage() {
                   <label className="block text-xs font-semibold text-slate-700">
                     Gambar / QRIS Donasi
                   </label>
-                  {qrisUrl && (
+                  {strQris && (
                     <button
                       type="button"
                       onClick={() => setQrisUrl("")}
@@ -410,7 +423,7 @@ export default function AdminProfilPage() {
                 <div className="flex items-center gap-3">
                   <div className="w-16 h-16 rounded-xl bg-white border border-slate-300 flex items-center justify-center p-1 overflow-hidden flex-shrink-0 shadow-inner">
                     {qrisPreviewValid ? (
-                      <img src={qrisUrl} alt="QRIS" className="w-full h-full object-contain" />
+                      <img src={strQris} alt="QRIS" className="w-full h-full object-contain" />
                     ) : (
                       <span className="text-lg">💳</span>
                     )}
@@ -430,7 +443,7 @@ export default function AdminProfilPage() {
                     />
                     <input
                       type="text"
-                      value={qrisUrl.startsWith("data:") ? "[Gambar QRIS Lokal Terunggah]" : qrisUrl}
+                      value={strQris.startsWith("data:") ? "[Gambar QRIS Lokal Terunggah]" : strQris}
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val !== "[Gambar QRIS Lokal Terunggah]") {
@@ -451,7 +464,7 @@ export default function AdminProfilPage() {
               </label>
               <input
                 type="text"
-                value={runningText}
+                value={safeStr(runningText)}
                 onChange={(e) => setRunningText(e.target.value)}
                 placeholder="Contoh: Selamat Datang di Masjid, mohon matikan HP saat shalat."
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
