@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fetchImarohData, IMAROH_APPS_SCRIPT_URL } from "@/lib/api";
+import { fetchImarohData } from "@/lib/api";
 
 interface Transaction {
   id_transaksi?: string;
@@ -11,6 +11,27 @@ interface Transaction {
   jenis?: string;
   nominal?: number | string;
   [key: string]: any;
+}
+
+async function postImarohAction(payload: Record<string, unknown>) {
+  const res = await fetch("/api/imaroh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await res.json()) as {
+    ok?: boolean;
+    error?: string;
+    message?: string;
+    id?: string;
+  };
+
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Gagal menyimpan perubahan ke Google Sheets.");
+  }
+
+  return data;
 }
 
 export default function AdminDashboard() {
@@ -47,7 +68,6 @@ export default function AdminDashboard() {
       if (result && Array.isArray(result.kas)) {
         const rawData = result.kas;
 
-        // Langsung gunakan ID asli dari Google Sheets (IN-, OUT-, atau TRX-) tanpa di-override paksa
         const formattedData = rawData.map((item: any, index: number) => {
           const originalId = item.id_transaksi || item.id;
 
@@ -55,7 +75,6 @@ export default function AdminDashboard() {
             return { ...item, id_transaksi: originalId };
           }
 
-          // Fallback jika kosong di sheets
           const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
           const [y, m] = dateStr.split("-");
           const ym = y && m ? `${y}${m}` : "202611";
@@ -139,38 +158,26 @@ export default function AdminDashboard() {
 
     setLoading(true);
     try {
-      await fetch(IMAROH_APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({
-          action: "tambahKas",
-          jenis,
-          nominal: nilaiNominal,
-          keterangan: ket,
-          tanggal,
-        }),
+      const res = await postImarohAction({
+        action: "tambahKas",
+        jenis,
+        nominal: nilaiNominal,
+        keterangan: ket,
+        tanggal,
       });
 
-      alert(
-        "Permintaan dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
-          "Periksa Google Sheets sebelum mengirim ulang agar tidak terjadi duplikat."
-      );
+      alert(res.message || "Transaksi kas berhasil disimpan ke Google Sheets.");
       setNominal("");
       setKeterangan("");
-      setTimeout(() => loadDataKas(), 1500);
+      await loadDataKas();
     } catch (error) {
       console.error("Gagal mengirim transaksi:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal menyimpan transaksi.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fungsi Edit Transaksi (Anti Duplikat - Memanggil action "editKas")
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTx) return;
@@ -186,62 +193,35 @@ export default function AdminDashboard() {
         nominal: Number(editingTx.nominal),
       };
 
-      await fetch(IMAROH_APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify(payload),
-      });
-
-      alert(
-        "Permintaan perubahan dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
-          "Periksa Google Sheets untuk memastikan data sudah terbarui."
-      );
+      const res = await postImarohAction(payload);
+      alert(res.message || "Transaksi kas berhasil diperbarui.");
       setEditingTx(null);
-      setTimeout(() => loadDataKas(), 1500);
+      await loadDataKas();
     } catch (error) {
       console.error("Gagal memperbarui transaksi:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal memperbarui transaksi.");
     } finally {
       setSavingEdit(false);
     }
   };
 
-  // Fungsi Hapus Transaksi Kas
   const handleDelete = async (id_transaksi: string) => {
     if (!confirm(`Yakin ingin menghapus transaksi dengan ID ${id_transaksi}?`)) return;
 
     try {
-      const payload = {
+      const res = await postImarohAction({
         action: "hapusKas",
-        id_transaksi: id_transaksi,
-      };
-
-      await fetch(IMAROH_APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify(payload),
+        id_transaksi,
       });
 
-      alert(
-        "Permintaan penghapusan dikirim, tetapi hasilnya belum dapat diverifikasi. " +
-          "Periksa Google Sheets untuk memastikan transaksi sudah terhapus."
-      );
-      setTimeout(() => loadDataKas(), 1500);
+      alert(res.message || "Transaksi kas berhasil dihapus.");
+      await loadDataKas();
     } catch (error) {
       console.error("Gagal menghapus transaksi:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal menghapus transaksi.");
     }
   };
 
-  // Logika Filter Data Transaksi
   const filteredTransaksi = transaksiList.filter((item) => {
     const tanggalItem = item.tanggal ? String(item.tanggal).split("T")[0] : "";
     const bulanItem = tanggalItem.slice(0, 7);
@@ -413,8 +393,8 @@ export default function AdminDashboard() {
               <h2 className="font-bold text-lg text-[#0b1c30]">Status Koneksi Database</h2>
               <div className="mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-100 space-y-2 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-slate-600 font-medium">Endpoint Web App:</span>
-                  <span className="text-[#047857] font-semibold">connected (/exec)</span>
+                  <span className="text-slate-600 font-medium">Proxy & Web App:</span>
+                  <span className="text-[#047857] font-semibold">connected (/api/imaroh)</span>
                 </div>
               </div>
             </div>
@@ -429,7 +409,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Tabel Riwayat Mutasi Kas (LENGKAP TOMBOL EDIT & HAPUS) */}
+        {/* Tabel Riwayat Mutasi Kas */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
