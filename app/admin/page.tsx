@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
@@ -52,6 +52,23 @@ function formatKategoriLabel(jenis: string): string {
   return jenis;
 }
 
+function buildPrintMeta(count: number, bulan: string, jenis: string) {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const code = `MBM-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(
+    now.getHours()
+  )}${pad(now.getMinutes())}${pad(now.getSeconds())}-${count}-${bulan}-${jenis}`;
+  const stamp = now.toLocaleString("en-US", {
+    month: "numeric",
+    day: "numeric",
+    year: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return { code, stamp };
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [jenis, setJenis] = useState("masuk");
@@ -87,7 +104,7 @@ export default function AdminDashboard() {
   const loadDataKas = async () => {
     try {
       setLoadingData(true);
-      const result = await fetchImarohData("all");
+      const result: any = await fetchImarohData("all");
       if (result) {
         const rawProfil = Array.isArray(result.profil) ? result.profil[0] : result.profil;
         if (rawProfil && typeof rawProfil === "object") {
@@ -292,23 +309,7 @@ export default function AdminDashboard() {
     window.print();
   };
 
-  const printMeta = useMemo(() => {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const code = `MBM-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(
-      now.getHours()
-    )}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const stamp = now.toLocaleString("en-US", {
-      month: "numeric",
-      day: "numeric",
-      year: "2-digit",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-    return { code, stamp };
-  }, [filteredTransaksi.length, filterBulan, filterJenis]);
-
+  const printMeta = buildPrintMeta(filteredTransaksi.length, filterBulan, filterJenis);
   const namaMasjidJudul = (profil.nama_masjid || "MASJID BAITUL MU'MININ").toUpperCase();
   const alamatMasjid = profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo";
   const logoMasjid = profil.logo_url || "/logo_mbm.png";
