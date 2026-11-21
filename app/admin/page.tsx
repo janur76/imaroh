@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
@@ -11,6 +11,12 @@ interface Transaction {
   jenis?: string;
   nominal?: number | string;
   [key: string]: any;
+}
+
+interface ProfilInfo {
+  nama_masjid?: string;
+  alamat?: string;
+  logo_url?: string;
 }
 
 async function postImarohAction(payload: Record<string, unknown>) {
@@ -34,6 +40,18 @@ async function postImarohAction(payload: Record<string, unknown>) {
   return data;
 }
 
+function formatPeriodeLabel(bulan: string): string {
+  if (!bulan || bulan === "semua") return "Semua Bulan";
+  return bulan;
+}
+
+function formatKategoriLabel(jenis: string): string {
+  if (!jenis || jenis === "semua") return "Semua Jenis (Masuk & Keluar)";
+  if (jenis === "masuk") return "Masuk Saja";
+  if (jenis === "keluar") return "Keluar Saja";
+  return jenis;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [jenis, setJenis] = useState("masuk");
@@ -43,6 +61,11 @@ export default function AdminDashboard() {
   const [loadingData, setLoadingData] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
   const [transaksiList, setTransaksiList] = useState<Transaction[]>([]);
+  const [profil, setProfil] = useState<ProfilInfo>({
+    nama_masjid: "Masjid Baitul Mu'minin",
+    alamat: "Perum Citra Mandiri Regency, Sidoarjo",
+    logo_url: "/logo_mbm.png",
+  });
 
   // State untuk Filter & Pencarian
   const [filterBulan, setFilterBulan] = useState("semua");
@@ -60,56 +83,67 @@ export default function AdminDashboard() {
   const GOOGLE_SHEETS_URL =
     "https://docs.google.com/spreadsheets/d/1v4ckXNCDzC749ecoLLaaAch4Fbfw7bWr6tirfYgYMfw/edit?gid=501383615#gid=501383615";
 
-  // Fungsi untuk memuat data transaksi dari Sheets
+  // Fungsi untuk memuat data transaksi & profil dari Sheets
   const loadDataKas = async () => {
     try {
       setLoadingData(true);
       const result = await fetchImarohData("all");
-      if (result && Array.isArray(result.kas)) {
-        const rawData = result.kas;
+      if (result) {
+        const rawProfil = Array.isArray(result.profil) ? result.profil[0] : result.profil;
+        if (rawProfil && typeof rawProfil === "object") {
+          setProfil({
+            nama_masjid: String(rawProfil.nama_masjid || "Masjid Baitul Mu'minin").trim(),
+            alamat: String(rawProfil.alamat || "Perum Citra Mandiri Regency, Sidoarjo").trim(),
+            logo_url: String(rawProfil.logo_url || "/logo_mbm.png").trim() || "/logo_mbm.png",
+          });
+        }
 
-        const formattedData = rawData.map((item: any, index: number) => {
-          const originalId = item.id_transaksi || item.id;
+        if (Array.isArray(result.kas)) {
+          const rawData = result.kas;
 
-          if (originalId) {
-            return { ...item, id_transaksi: originalId };
-          }
+          const formattedData = rawData.map((item: any, index: number) => {
+            const originalId = item.id_transaksi || item.id;
 
-          const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
-          const [y, m] = dateStr.split("-");
-          const ym = y && m ? `${y}${m}` : "202611";
-          const jenisStr = String(item.jenis || "").toLowerCase();
-          const prefix = jenisStr.includes("keluar") ? "OUT-" : "IN-";
-          const paddedIdx = String(index + 1).padStart(3, "0");
+            if (originalId) {
+              return { ...item, id_transaksi: originalId };
+            }
 
-          return {
-            ...item,
-            id_transaksi: `${prefix}${ym}-${paddedIdx}`,
-          };
-        });
+            const dateStr = item.tanggal ? String(item.tanggal).split("T")[0] : "2026-11-01";
+            const [y, m] = dateStr.split("-");
+            const ym = y && m ? `${y}${m}` : "202611";
+            const jenisStr = String(item.jenis || "").toLowerCase();
+            const prefix = jenisStr.includes("keluar") ? "OUT-" : "IN-";
+            const paddedIdx = String(index + 1).padStart(3, "0");
 
-        const sortedData = [...formattedData].reverse();
-        setTransaksiList(sortedData);
+            return {
+              ...item,
+              id_transaksi: `${prefix}${ym}-${paddedIdx}`,
+            };
+          });
 
-        let totalMasuk = 0;
-        let totalKeluar = 0;
+          const sortedData = [...formattedData].reverse();
+          setTransaksiList(sortedData);
 
-        formattedData.forEach((item: any) => {
-          const nominalVal = Number(item.nominal || 0);
-          const jenisStr = String(item.jenis || "").toLowerCase();
+          let totalMasuk = 0;
+          let totalKeluar = 0;
 
-          if (jenisStr.includes("masuk")) {
-            totalMasuk += nominalVal;
-          } else if (jenisStr.includes("keluar")) {
-            totalKeluar += nominalVal;
-          }
-        });
+          formattedData.forEach((item: any) => {
+            const nominalVal = Number(item.nominal || 0);
+            const jenisStr = String(item.jenis || "").toLowerCase();
 
-        setKpi({
-          kasMasuk: totalMasuk,
-          kasKeluar: totalKeluar,
-          saldoAkhir: totalMasuk - totalKeluar,
-        });
+            if (jenisStr.includes("masuk")) {
+              totalMasuk += nominalVal;
+            } else if (jenisStr.includes("keluar")) {
+              totalKeluar += nominalVal;
+            }
+          });
+
+          setKpi({
+            kasMasuk: totalMasuk,
+            kasKeluar: totalKeluar,
+            saldoAkhir: totalMasuk - totalKeluar,
+          });
+        }
       }
     } catch (err) {
       console.error("Gagal memuat data kas:", err);
@@ -258,9 +292,64 @@ export default function AdminDashboard() {
     window.print();
   };
 
+  const printMeta = useMemo(() => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const code = `MBM-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(
+      now.getHours()
+    )}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const stamp = now.toLocaleString("en-US", {
+      month: "numeric",
+      day: "numeric",
+      year: "2-digit",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return { code, stamp };
+  }, [filteredTransaksi.length, filterBulan, filterJenis]);
+
+  const namaMasjidJudul = (profil.nama_masjid || "MASJID BAITUL MU'MININ").toUpperCase();
+  const alamatMasjid = profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo";
+  const logoMasjid = profil.logo_url || "/logo_mbm.png";
+
   return (
-    <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8 print:bg-white print:p-0">
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 12mm;
+          }
+          body {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-header-a4 {
+            display: block !important;
+          }
+          .print-kas-only {
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: #ffffff !important;
+          }
+          .print-table-wrap {
+            overflow: visible !important;
+          }
+        }
+        .print-header-a4 {
+          display: none;
+        }
+      `}</style>
+
+      <div className="max-w-7xl mx-auto space-y-6 print:max-w-full print:space-y-3">
         {/* Top Bar Admin */}
         <div className="no-print bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -410,16 +499,48 @@ export default function AdminDashboard() {
         </div>
 
         {/* Tabel Riwayat Mutasi Kas */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div className="print-kas-only bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          {/* Kop Cetak A4 (Logo Kiri Atas + Judul + Alamat + Periode/Kategori) */}
+          <div className="print-header-a4 space-y-2 mb-3">
+            <div className="flex items-center justify-between text-[10px] text-slate-500">
+              <span>{printMeta.stamp}</span>
+              <span className="font-mono">{printMeta.code}</span>
+            </div>
+
+            <div className="flex items-center gap-3 pb-2.5 border-b border-slate-300">
+              <img
+                src={logoMasjid}
+                alt="Logo Masjid"
+                className="w-11 h-11 object-contain shrink-0"
+              />
+              <div className="flex-1 text-center pr-8">
+                <h1 className="text-base font-black tracking-tight text-slate-900 uppercase">
+                  LAPORAN KEUANGAN KAS {namaMasjidJudul}
+                </h1>
+                <p className="text-xs text-slate-600 mt-0.5">{alamatMasjid}</p>
+              </div>
+            </div>
+
+            <div className="py-1.5 text-center text-xs text-slate-700 border-b-2 border-slate-800">
+              <span>
+                Periode Bulan: <strong>{formatPeriodeLabel(filterBulan)}</strong>
+              </span>
+              <span className="mx-3">&bull;</span>
+              <span>
+                Kategori: <strong>{formatKategoriLabel(filterJenis)}</strong>
+              </span>
+            </div>
+          </div>
+
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h2 className="font-bold text-lg text-[#0b1c30]">Riwayat Mutasi & Laporan Kas</h2>
-              <p className="text-xs text-slate-500">
+              <p className="no-print text-xs text-slate-500">
                 Filter transaksi berdasarkan bulan dan jenis pengeluaran/pemasukan.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="no-print flex flex-wrap items-center gap-3">
               <select
                 value={filterBulan}
                 onChange={(e) => setFilterBulan(e.target.value)}
@@ -453,7 +574,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-between items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+          <div className="flex flex-wrap justify-between items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs print:bg-white">
             <span className="text-slate-600 font-medium">
               Menampilkan <strong className="text-slate-900">{filteredTransaksi.length}</strong> transaksi
             </span>
@@ -465,16 +586,16 @@ export default function AdminDashboard() {
             </span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto print-table-wrap">
             <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200">
+              <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200 print:bg-white">
                 <tr>
                   <th className="p-3">ID Transaksi</th>
                   <th className="p-3">Tanggal</th>
                   <th className="p-3">Keterangan</th>
                   <th className="p-3">Jenis</th>
                   <th className="p-3 text-right">Nominal (Rp)</th>
-                  <th className="p-3 text-center">Aksi</th>
+                  <th className="no-print p-3 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -511,7 +632,7 @@ export default function AdminDashboard() {
                       <td className="p-3 text-right font-bold text-slate-800 whitespace-nowrap">
                         Rp {Number(item.nominal || 0).toLocaleString("id-ID")}
                       </td>
-                      <td className="p-3 text-center space-x-2 whitespace-nowrap">
+                      <td className="no-print p-3 text-center space-x-2 whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => setEditingTx(item)}
@@ -544,7 +665,7 @@ export default function AdminDashboard() {
 
       {/* MODAL EDIT */}
       {editingTx && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-slate-800">
             <h3 className="text-lg font-bold text-[#0b1c30] mb-1">Edit Transaksi</h3>
             <p className="text-xs text-slate-500 mb-4 font-mono">ID: {editingTx.id_transaksi}</p>
