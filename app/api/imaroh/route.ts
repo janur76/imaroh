@@ -26,15 +26,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const secret = process.env.API_SECRET || process.env.IMAROH_API_SECRET || "";
-    if (!secret) {
+    const scriptUrl =
+      process.env.APPS_SCRIPT_URL ||
+      process.env.IMAROH_APPS_SCRIPT_URL ||
+      IMAROH_APPS_SCRIPT_URL ||
+      "";
+
+    if (!scriptUrl) {
       return NextResponse.json(
-        { ok: false, error: "API_SECRET belum dikonfigurasi di environment server." },
+        { ok: false, error: "APPS_SCRIPT_URL belum dikonfigurasi." },
         { status: 500 }
       );
     }
 
-    const gasResponse = await fetch(IMAROH_APPS_SCRIPT_URL, {
+    const secret =
+      process.env.APPS_SCRIPT_SECRET ||
+      process.env.API_SECRET ||
+      process.env.IMAROH_API_SECRET ||
+      "";
+
+    if (!secret) {
+      return NextResponse.json(
+        { ok: false, error: "APPS_SCRIPT_SECRET belum dikonfigurasi di environment server." },
+        { status: 500 }
+      );
+    }
+
+    const gasResponse = await fetch(scriptUrl, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify({
