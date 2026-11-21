@@ -1,1 +1,83 @@
+import { NextResponse } from "next/server";
+import { IMAROH_APPS_SCRIPT_URL } from "@/lib/api";
 
+const ALLOWED_ACTIONS = new Set([
+  "tambahKas",
+  "editKas",
+  "hapusKas",
+  "tambahInventaris",
+  "editInventaris",
+  "hapusInventaris",
+  "tambahKajian",
+  "editKajian",
+  "hapusKajian",
+  "updateProfil",
+]);
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const action = String(body?.action || "").trim();
+
+    if (!ALLOWED_ACTIONS.has(action)) {
+      return NextResponse.json(
+        { ok: false, error: "Action tidak dikenali atau tidak diizinkan." },
+        { status: 400 }
+      );
+    }
+
+    const secret = process.env.API_SECRET || process.env.IMAROH_API_SECRET || "";
+    if (!secret) {
+      return NextResponse.json(
+        { ok: false, error: "API_SECRET belum dikonfigurasi di environment server." },
+        { status: 500 }
+      );
+    }
+
+    const gasResponse = await fetch(IMAROH_APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify({
+        ...body,
+        action,
+        secret,
+      }),
+      redirect: "follow",
+      cache: "no-store",
+    });
+
+    const rawText = await gasResponse.text();
+    let parsed: { status?: string; message?: string; id?: string } | null = null;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = null;
+    }
+
+    if (!gasResponse.ok) {
+      return NextResponse.json(
+        { ok: false, error: `Google Apps Script merespons HTTP ${gasResponse.status}.` },
+        { status: 502 }
+      );
+    }
+
+    if (!parsed || parsed.status !== "success") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: parsed?.message || "Google Apps Script menolak atau gagal memproses permintaan.",
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: parsed.message || "Berhasil disimpan ke Google Sheets.",
+      id: parsed.id,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal menghubungi server database.";
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
+}
