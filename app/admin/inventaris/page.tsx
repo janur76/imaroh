@@ -13,6 +13,27 @@ interface InventarisItem {
   [key: string]: any;
 }
 
+async function postImarohAction(payload: Record<string, unknown>) {
+  const res = await fetch("/api/imaroh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await res.json()) as {
+    ok?: boolean;
+    error?: string;
+    message?: string;
+    id?: string;
+  };
+
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Gagal menyimpan perubahan inventaris ke Google Sheets.");
+  }
+
+  return data;
+}
+
 export default function AdminInventaris() {
   const router = useRouter();
   const [inventarisList, setInventarisList] = useState<InventarisItem[]>([]);
@@ -27,9 +48,6 @@ export default function AdminInventaris() {
 
   // State Modal Edit
   const [editingItem, setEditingItem] = useState<InventarisItem | null>(null);
-
-  const APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbwqb8DzZsMu66a0c4LmZEwWYQbKm3Ay1CB6-w6jV7cxUUdIszyZ5wMKx88dhaVVKO8q/exec";
 
   const loadDataInventaris = async () => {
     try {
@@ -69,34 +87,21 @@ export default function AdminInventaris() {
 
     setLoading(true);
     try {
-      const payload = {
+      const res = await postImarohAction({
         action: "tambahInventaris",
         nama_barang: namaBarang,
         jumlah: Number(jumlah),
         kondisi: kondisi,
         lokasi: lokasi,
-      };
-
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify(payload),
       });
 
-      alert(
-        "Permintaan tambah barang dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
-          "Periksa Google Sheets sebelum mengirim ulang agar tidak terjadi duplikat."
-      );
+      alert(res.message || "Barang inventaris berhasil ditambahkan ke Google Sheets.");
       setNamaBarang("");
       setJumlah("");
-      setTimeout(() => loadDataInventaris(), 1500);
+      await loadDataInventaris();
     } catch (error) {
       console.error("Gagal menambah inventaris:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal menambah inventaris.");
     } finally {
       setLoading(false);
     }
@@ -108,34 +113,21 @@ export default function AdminInventaris() {
 
     setSavingEdit(true);
     try {
-      const payload = {
+      const res = await postImarohAction({
         action: "editInventaris",
         id_barang: editingItem.id_barang,
         nama_barang: editingItem.nama_barang,
         jumlah: Number(editingItem.jumlah),
         kondisi: editingItem.kondisi,
         lokasi: editingItem.lokasi,
-      };
-
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify(payload),
       });
 
-      alert(
-        "Permintaan perubahan inventaris dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
-          "Periksa Google Sheets untuk memastikan data sudah terbarui."
-      );
+      alert(res.message || "Barang inventaris berhasil diperbarui.");
       setEditingItem(null);
-      setTimeout(() => loadDataInventaris(), 1500);
+      await loadDataInventaris();
     } catch (error) {
       console.error("Gagal mengupdate inventaris:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal mengupdate inventaris.");
     } finally {
       setSavingEdit(false);
     }
@@ -145,29 +137,16 @@ export default function AdminInventaris() {
     if (!confirm(`Yakin ingin menghapus barang dengan ID ${id_barang}?`)) return;
 
     try {
-      const payload = {
+      const res = await postImarohAction({
         action: "hapusInventaris",
         id_barang: id_barang,
-      };
-
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify(payload),
       });
 
-      alert(
-        "Permintaan penghapusan barang dikirim, tetapi hasilnya belum dapat diverifikasi. " +
-          "Periksa Google Sheets untuk memastikan data sudah terhapus."
-      );
-      setTimeout(() => loadDataInventaris(), 1500);
+      alert(res.message || "Barang inventaris berhasil dihapus.");
+      await loadDataInventaris();
     } catch (error) {
       console.error("Gagal menghapus inventaris:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal menghapus inventaris.");
     }
   };
 
