@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fetchImarohData, IMAROH_APPS_SCRIPT_URL } from "@/lib/api";
+import { fetchImarohData } from "@/lib/api";
 
 function isValidImageSrc(val: string): boolean {
   const trimmed = val.trim();
@@ -102,6 +102,27 @@ async function compressImageFile(
   });
 }
 
+async function postImarohAction(payload: Record<string, unknown>) {
+  const res = await fetch("/api/imaroh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await res.json()) as {
+    ok?: boolean;
+    error?: string;
+    message?: string;
+    id?: string;
+  };
+
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Gagal memperbarui profil masjid ke Google Sheets.");
+  }
+
+  return data;
+}
+
 export default function AdminProfilPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -190,11 +211,21 @@ export default function AdminProfilPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
 
     const cleanLogo = isValidImageSrc(logoUrl) ? logoUrl.trim() : "";
     const cleanQris = isValidImageSrc(qrisUrl) ? qrisUrl.trim() : "";
 
+    if (cleanLogo.length > 48500) {
+      alert("Data Logo Masjid terlalu panjang untuk sel Google Sheets. Gunakan URL/path gambar.");
+      return;
+    }
+
+    if (cleanQris.length > 48500) {
+      alert("Data QRIS Donasi terlalu panjang untuk sel Google Sheets. Gunakan URL/path gambar.");
+      return;
+    }
+
+    setLoading(true);
     try {
       const payload = {
         action: "updateProfil",
@@ -206,29 +237,12 @@ export default function AdminProfilPage() {
         logo_url: cleanLogo,
       };
 
-      await fetch(IMAROH_APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: {
-          "Content-Type": "text/plain;charset=UTF-8",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      alert(
-        "Permintaan pembaruan profil dikirim, tetapi hasil penyimpanan belum dapat diverifikasi. " +
-          "Periksa Google Sheets dan tekan F5 setelah beberapa detik untuk memastikan logo & QRIS tersimpan."
-      );
-
-      setTimeout(() => {
-        loadProfil();
-      }, 2000);
+      const res = await postImarohAction(payload);
+      alert(res.message || "Profil masjid berhasil diperbarui ke Google Sheets.");
+      await loadProfil();
     } catch (error) {
       console.error("Gagal menyimpan profil:", error);
-      alert(
-        "Permintaan gagal atau hasilnya tidak diketahui. " +
-          "Periksa Google Sheets sebelum mencoba lagi."
-      );
+      alert(error instanceof Error ? error.message : "Gagal menyimpan profil masjid.");
     } finally {
       setLoading(false);
     }
