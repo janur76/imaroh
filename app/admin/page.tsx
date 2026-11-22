@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
@@ -10,6 +10,7 @@ interface Transaction {
   keterangan?: string;
   jenis?: string;
   nominal?: number | string;
+  bukti_url?: string;
   [key: string]: any;
 }
 
@@ -36,6 +37,7 @@ async function postImarohAction(payload: Record<string, unknown>) {
     error?: string;
     message?: string;
     id?: string;
+    bukti_url?: string;
   };
 
   if (!res.ok || !data.ok) {
@@ -43,6 +45,57 @@ async function postImarohAction(payload: Record<string, unknown>) {
   }
 
   return data;
+}
+
+async function compressNotaImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Gagal membaca file foto nota."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Format gambar nota tidak valid."));
+      img.onload = () => {
+        const maxDim = 1280;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas tidak tersedia di browser."));
+          return;
+        }
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const qualities = [0.78, 0.65, 0.52];
+        for (const q of qualities) {
+          const out = canvas.toDataURL("image/jpeg", q);
+          // Batasi ukuran payload agar unggah ke Apps Script cepat & lancar di sinyal HP
+          if (out.length <= 1_900_000) {
+            resolve(out);
+            return;
+          }
+        }
+
+        resolve(canvas.toDataURL("image/jpeg", 0.45));
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function formatPeriodeLabel(bulan: string): string {
@@ -76,9 +129,16 @@ function createPrintStamp(): PrintMeta {
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+
   const [jenis, setJenis] = useState("masuk");
   const [nominal, setNominal] = useState("");
   const [keterangan, setKeterangan] = useState("");
+  const [notaPreview, setNotaPreview] = useState("");
+  const [notaName, setNotaName] = useState("");
+  const [processingNota, setProcessingNota] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -97,8 +157,13 @@ export default function AdminDashboard() {
   const [filterBulan, setFilterBulan] = useState("semua");
   const [filterJenis, setFilterJenis] = useState("semua");
 
-  // State untuk Modal Edit Transaksi
+  // State untuk Modal Edit Transaksi & Modal Lihat Nota
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [viewingNota, setViewingNota] = useState<{
+    url: string;
+    title: string;
+    id: string;
+  } | null>(null);
 
   const [kpi, setKpi] = useState({
     saldoAkhir: 0,
@@ -194,8 +259,50 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleNotaSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Pilih file gambar foto nota (JPG, PNG, atau WEBP).");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Ukuran file foto nota maksimal 10MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setProcessingNota(true);
+    try {
+      const compressed = await compressNotaImage(file);
+      setNotaPreview(compressed);
+      setNotaName(file.name || "foto-nota.jpg");
+    } catch (err) {
+      console.error("Gagal memproses foto nota:", err);
+      alert(err instanceof Error ? err.message : "Gagal memproses foto nota.");
+    } finally {
+      setProcessingNota(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleClearNota = () => {
+    setNotaPreview("");
+    setNotaName("");
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (processingNota) {
+      alert("Tunggu sebentar, foto nota sedang diproses...");
+      return;
+    }
 
     const nilaiNominal = Number(nominal);
     const ket = keterangan.trim();
@@ -219,17 +326,22 @@ export default function AdminDashboard() {
 
     setLoading(true);
     try {
-      const res = await postImarohAction({
+      const payload: Record<string, unknown> = {
         action: "tambahKas",
         jenis,
         nominal: nilaiNominal,
         keterangan: ket,
         tanggal,
-      });
+      };
+      if (notaPreview) {
+        payload.bukti_base64 = notaPreview;
+      }
 
+      const res = await postImarohAction(payload);
       alert(res.message || "Transaksi kas berhasil disimpan ke Google Sheets.");
       setNominal("");
       setKeterangan("");
+      handleClearNota();
       await loadDataKas();
     } catch (error) {
       console.error("Gagal mengirim transaksi:", error);
@@ -465,17 +577,101 @@ export default function AdminDashboard() {
                   type="text"
                   value={keterangan}
                   onChange={(e) => setKeterangan(e.target.value)}
-                  placeholder="Contoh: Infak Jumat"
+                  placeholder="Contoh: Infak Jumat / Beli Karpet"
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
                   required
                 />
               </div>
+
+              {/* Fitur Jepret Kamera Langsung & Upload Foto Nota */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Bukti / Foto Nota (Opsional)
+                  </label>
+                  {notaPreview && (
+                    <button
+                      type="button"
+                      onClick={handleClearNota}
+                      className="text-[11px] font-semibold text-rose-600 hover:text-rose-700"
+                    >
+                      Hapus Foto
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleNotaSelected}
+                  className="hidden"
+                />
+                <input
+                  ref={galleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleNotaSelected}
+                  className="hidden"
+                />
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={processingNota}
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#047857] border border-emerald-200 text-xs font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span>📷</span>
+                    <span>Jepret Kamera</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={processingNota}
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span>🖼️</span>
+                    <span>Upload Nota</span>
+                  </button>
+                </div>
+
+                {processingNota && (
+                  <p className="text-[11px] text-emerald-700 font-medium">
+                    Mengompresi foto nota otomatis...
+                  </p>
+                )}
+
+                {notaPreview && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <img
+                      src={notaPreview}
+                      alt="Preview Foto Nota"
+                      className="w-14 h-14 object-cover rounded-lg border border-slate-300 bg-white shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-800 truncate">
+                        {notaName || "Foto Nota Siap Diunggah"}
+                      </p>
+                      <p className="text-[11px] text-emerald-700">
+                        Terkompresi otomatis & siap disimpan ke Google Drive.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || processingNota}
                 className="w-full py-3 px-4 rounded-xl bg-[#047857] hover:bg-[#064e3b] text-white font-semibold text-sm transition shadow-md disabled:opacity-50"
               >
-                {loading ? "Menyimpan..." : "Simpan ke Database Sheets"}
+                {loading
+                  ? "Menyimpan..."
+                  : processingNota
+                  ? "Memproses Nota..."
+                  : "Simpan ke Database Sheets"}
               </button>
             </form>
           </div>
@@ -487,6 +683,10 @@ export default function AdminDashboard() {
                 <div className="flex justify-between">
                   <span className="text-slate-600 font-medium">Proxy & Web App:</span>
                   <span className="text-[#047857] font-semibold">connected (/api/imaroh)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600 font-medium">Penyimpanan Bukti Nota:</span>
+                  <span className="text-[#047857] font-semibold">Google Drive (IMAROH_BUKTI_NOTA)</span>
                 </div>
               </div>
             </div>
@@ -615,6 +815,7 @@ export default function AdminDashboard() {
                   <th className="p-3">Tanggal</th>
                   <th className="p-3">Keterangan</th>
                   <th className="p-3">Jenis</th>
+                  <th className="p-3">Nota</th>
                   <th className="p-3 text-right">Nominal (Rp)</th>
                   <th className="print:hidden p-3 text-center">Aksi</th>
                 </tr>
@@ -622,7 +823,7 @@ export default function AdminDashboard() {
               <tbody className="divide-y divide-slate-100">
                 {loadingData ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                    <td colSpan={7} className="p-8 text-center text-slate-400">
                       Memuat data transaksi dari Google Sheets...
                     </td>
                   </tr>
@@ -650,6 +851,25 @@ export default function AdminDashboard() {
                           {item.jenis || "Masuk"}
                         </span>
                       </td>
+                      <td className="p-3 whitespace-nowrap">
+                        {item.bukti_url ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setViewingNota({
+                                url: String(item.bukti_url),
+                                title: String(item.keterangan || "Bukti Nota"),
+                                id: String(item.id_transaksi || "-"),
+                              })
+                            }
+                            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#047857] border border-emerald-200 text-[11px] font-semibold transition"
+                          >
+                            🧾 Lihat Nota
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">-</span>
+                        )}
+                      </td>
                       <td className="p-3 text-right font-bold text-slate-800 whitespace-nowrap">
                         Rp {Number(item.nominal || 0).toLocaleString("id-ID")}
                       </td>
@@ -673,7 +893,7 @@ export default function AdminDashboard() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                    <td colSpan={7} className="p-8 text-center text-slate-400">
                       Tidak ada data transaksi.
                     </td>
                   </tr>
@@ -759,6 +979,54 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL LIHAT FOTO NOTA */}
+      {viewingNota && (
+        <div
+          className="print:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setViewingNota(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 text-slate-800 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-mono text-emerald-700 font-semibold">
+                  ID: {viewingNota.id}
+                </p>
+                <h3 className="text-base font-bold text-[#0b1c30]">{viewingNota.title}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingNota(null)}
+                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+
+            <div className="rounded-2xl bg-slate-50 border border-slate-200 p-2 max-h-[65vh] overflow-auto flex items-center justify-center">
+              <img
+                src={viewingNota.url}
+                alt={`Bukti Nota ${viewingNota.title}`}
+                className="max-w-full h-auto rounded-xl object-contain"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <a
+                href={viewingNota.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition"
+              >
+                Buka Gambar Penuh ↗
+              </a>
+            </div>
           </div>
         </div>
       )}
