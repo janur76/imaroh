@@ -4,8 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
-const TEMPAT_MASJID_STORAGE_KEY = "imaroh_tempat_masjid_header";
-
 function safeStr(val: unknown): string {
   if (val === null || val === undefined) return "";
   return String(val);
@@ -33,19 +31,36 @@ function isValidImageSrc(val: unknown): boolean {
   );
 }
 
-function extractDefaultTempat(rawNama: unknown, rawAlamat: unknown): string {
+function pecahTempatDanAlamat(rawNama: unknown, rawAlamat: unknown) {
   const nama = safeTrim(rawNama);
-  const alamat = safeTrim(rawAlamat);
+  const alamatFull = safeTrim(rawAlamat);
+
   const marker = "Citra Mandiri Regency";
   const idx = nama.toLowerCase().indexOf(marker.toLowerCase());
-  if (idx > 0) {
-    return nama.slice(idx).trim();
+  if (idx > 0 && !alamatFull) {
+    return {
+      tempat: nama.slice(idx).trim(),
+      alamat: nama.slice(idx).trim(),
+    };
   }
-  if (alamat) {
-    const firstPart = alamat.split(",")[0]?.trim();
-    if (firstPart) return firstPart;
+
+  const pertama = alamatFull.split(",")[0]?.trim() || "";
+  return {
+    tempat: pertama,
+    alamat: alamatFull,
+  };
+}
+
+function gabungTempatDanAlamat(tempat: string, alamatLengkap: string): string {
+  const t = safeTrim(tempat);
+  const a = safeTrim(alamatLengkap);
+
+  if (!t) return a;
+  if (!a) return t;
+  if (a.toLowerCase().startsWith(t.toLowerCase())) {
+    return a;
   }
-  return "";
+  return `${t}, ${a}`;
 }
 
 async function compressImageFile(
@@ -160,14 +175,8 @@ export default function AdminProfilPage() {
   const [qrisUrl, setQrisUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
 
-  // Muat data profil saat halaman dibuka
   const loadProfil = async () => {
     try {
-      const savedTempat =
-        typeof window !== "undefined"
-          ? safeTrim(window.localStorage.getItem(TEMPAT_MASJID_STORAGE_KEY))
-          : "";
-
       const data = await fetchImarohData("profil");
       if (data && Array.isArray(data.profil) && data.profil.length > 0) {
         const p = data.profil[0];
@@ -175,16 +184,15 @@ export default function AdminProfilPage() {
         const rawQris = safeTrim(p?.qris_url);
         const rawNama = safeStr(p?.nama_masjid);
         const rawAlamat = safeStr(p?.alamat);
+        const parsed = pecahTempatDanAlamat(rawNama, rawAlamat);
 
         setNamaMasjid(rawNama);
-        setTempatMasjid(savedTempat || extractDefaultTempat(rawNama, rawAlamat));
-        setAlamat(rawAlamat);
+        setTempatMasjid(parsed.tempat);
+        setAlamat(parsed.alamat);
         setTelepon(safeStr(p?.telepon));
         setRunningText(safeStr(p?.running_text));
         setLogoUrl(isValidImageSrc(rawLogo) ? rawLogo : "");
         setQrisUrl(isValidImageSrc(rawQris) ? rawQris : "");
-      } else if (savedTempat) {
-        setTempatMasjid(savedTempat);
       }
     } catch (error) {
       console.error("Gagal memuat profil masjid:", error);
@@ -206,7 +214,6 @@ export default function AdminProfilPage() {
     }
   };
 
-  // Handler khusus untuk upload file lokal dari perangkat dengan kompresi adaptif
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (val: string) => void,
@@ -264,20 +271,14 @@ export default function AdminProfilPage() {
       return;
     }
 
-    const cleanNama = safeTrim(namaMasjid);
-    const cleanTempat = safeTrim(tempatMasjid);
-    const cleanAlamat = safeTrim(alamat);
+    const alamatFinal = gabungTempatDanAlamat(tempatMasjid, alamat);
 
     setLoading(true);
     try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(TEMPAT_MASJID_STORAGE_KEY, cleanTempat);
-      }
-
       const payload = {
         action: "updateProfil",
-        nama_masjid: cleanNama,
-        alamat: cleanAlamat,
+        nama_masjid: safeTrim(namaMasjid),
+        alamat: alamatFinal,
         telepon: safeTrim(telepon),
         running_text: safeTrim(runningText),
         qris_url: cleanQris,
@@ -361,11 +362,11 @@ export default function AdminProfilPage() {
                   type="text"
                   value={safeStr(tempatMasjid)}
                   onChange={(e) => setTempatMasjid(e.target.value)}
-                  placeholder="Contoh: Citra Mandiri Regency"
+                  placeholder="Contoh: Perumahan Citra Mandiri Regency"
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Tampil di bawah nama masjid pada header tanpa mengubah alamat lengkap di Sheets.
+                  Tampil di bawah nama masjid pada header dan ikut tersimpan ke Google Sheets.
                 </p>
               </div>
             </div>
