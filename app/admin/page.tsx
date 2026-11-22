@@ -19,6 +19,11 @@ interface ProfilInfo {
   logo_url?: string;
 }
 
+interface PrintMeta {
+  code: string;
+  stamp: string;
+}
+
 async function postImarohAction(payload: Record<string, unknown>) {
   const res = await fetch("/api/imaroh", {
     method: "POST",
@@ -52,12 +57,12 @@ function formatKategoriLabel(jenis: string): string {
   return jenis;
 }
 
-function buildPrintMeta(count: number, bulan: string, jenis: string) {
+function createPrintStamp(): PrintMeta {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const code = `MBM-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(
     now.getHours()
-  )}${pad(now.getMinutes())}${pad(now.getSeconds())}-${count}-${bulan}-${jenis}`;
+  )}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   const stamp = now.toLocaleString("en-US", {
     month: "numeric",
     day: "numeric",
@@ -82,6 +87,10 @@ export default function AdminDashboard() {
     nama_masjid: "Masjid Baitul Mu'minin",
     alamat: "Perum Citra Mandiri Regency, Sidoarjo",
     logo_url: "/logo_mbm.png",
+  });
+  const [printMeta, setPrintMeta] = useState<PrintMeta>({
+    code: "MBM-REPORT",
+    stamp: "",
   });
 
   // State untuk Filter & Pencarian
@@ -170,6 +179,7 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    setPrintMeta(createPrintStamp());
     loadDataKas();
   }, []);
 
@@ -306,10 +316,12 @@ export default function AdminDashboard() {
     .reverse();
 
   const handleCetakLaporan = () => {
-    window.print();
+    setPrintMeta(createPrintStamp());
+    setTimeout(() => {
+      window.print();
+    }, 30);
   };
 
-  const printMeta = buildPrintMeta(filteredTransaksi.length, filterBulan, filterJenis);
   const namaMasjidJudul = (profil.nama_masjid || "MASJID BAITUL MU'MININ").toUpperCase();
   const alamatMasjid = profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo";
   const logoMasjid = profil.logo_url || "/logo_mbm.png";
