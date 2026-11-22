@@ -31,6 +31,21 @@ function isValidImageSrc(val: unknown): boolean {
   );
 }
 
+function extractInitialTempat(rawNama: unknown, rawAlamat: unknown): string {
+  const nama = safeTrim(rawNama);
+  const alamat = safeTrim(rawAlamat);
+  const marker = "Citra Mandiri Regency";
+  const idx = nama.toLowerCase().indexOf(marker.toLowerCase());
+  if (idx > 0) {
+    return nama.slice(idx).trim();
+  }
+  if (alamat) {
+    const firstPart = alamat.split(",")[0]?.trim();
+    if (firstPart) return firstPart;
+  }
+  return "";
+}
+
 async function compressImageFile(
   file: File,
   options: { maxSize: number; preferPng?: boolean; maxChars?: number }
@@ -136,6 +151,7 @@ export default function AdminProfilPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [namaMasjid, setNamaMasjid] = useState("");
+  const [tempatMasjid, setTempatMasjid] = useState("");
   const [alamat, setAlamat] = useState("");
   const [telepon, setTelepon] = useState("");
   const [runningText, setRunningText] = useState("");
@@ -150,9 +166,15 @@ export default function AdminProfilPage() {
         const p = data.profil[0];
         const rawLogo = safeTrim(p?.logo_url);
         const rawQris = safeTrim(p?.qris_url);
+        const rawNama = safeStr(p?.nama_masjid);
+        const rawAlamat = safeStr(p?.alamat);
+        const rawTempat = safeStr(p?.tempat_masjid || p?.lokasi_masjid);
 
-        setNamaMasjid(safeStr(p?.nama_masjid));
-        setAlamat(safeStr(p?.alamat));
+        setNamaMasjid(rawNama);
+        setTempatMasjid(
+          safeTrim(rawTempat) || extractInitialTempat(rawNama, rawAlamat)
+        );
+        setAlamat(rawAlamat);
         setTelepon(safeStr(p?.telepon));
         setRunningText(safeStr(p?.running_text));
         setLogoUrl(isValidImageSrc(rawLogo) ? rawLogo : "");
@@ -236,12 +258,19 @@ export default function AdminProfilPage() {
       return;
     }
 
+    const cleanNama = safeTrim(namaMasjid);
+    const cleanTempat = safeTrim(tempatMasjid);
+    const cleanAlamat = safeTrim(alamat);
+    const finalAlamat = cleanAlamat || cleanTempat;
+
     setLoading(true);
     try {
       const payload = {
         action: "updateProfil",
-        nama_masjid: safeTrim(namaMasjid),
-        alamat: safeTrim(alamat),
+        nama_masjid: cleanNama,
+        tempat_masjid: cleanTempat,
+        lokasi_masjid: cleanTempat,
+        alamat: finalAlamat,
         telepon: safeTrim(telepon),
         running_text: safeTrim(runningText),
         qris_url: cleanQris,
@@ -277,7 +306,7 @@ export default function AdminProfilPage() {
               Profil & Pengaturan Masjid
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Kelola identitas, logo transparan, QRIS donasi, dan running text beranda.
+              Kelola identitas, tempat/alamat masjid, logo transparan, QRIS donasi, dan running text beranda.
             </p>
           </div>
 
@@ -302,18 +331,36 @@ export default function AdminProfilPage() {
         {/* Form Pengaturan Profil */}
         <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
           <form onSubmit={handleSave} className="space-y-6">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Nama Resmi Masjid
-              </label>
-              <input
-                type="text"
-                value={safeStr(namaMasjid)}
-                onChange={(e) => setNamaMasjid(e.target.value)}
-                placeholder="Contoh: Masjid Baitul Mu'minin"
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
-                required
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nama Resmi Masjid
+                </label>
+                <input
+                  type="text"
+                  value={safeStr(namaMasjid)}
+                  onChange={(e) => setNamaMasjid(e.target.value)}
+                  placeholder="Contoh: Masjid Baitul Mu'minin"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Tempat / Lokasi Masjid (Sub-judul Header)
+                </label>
+                <input
+                  type="text"
+                  value={safeStr(tempatMasjid)}
+                  onChange={(e) => setTempatMasjid(e.target.value)}
+                  placeholder="Contoh: Citra Mandiri Regency"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#047857]"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Tampil di bawah nama masjid pada header dengan ukuran lebih kecil.
+                </p>
+              </div>
             </div>
 
             {/* Bagian Upload & Preview Logo Masjid */}
@@ -333,7 +380,7 @@ export default function AdminProfilPage() {
                 )}
               </div>
               <div className="flex flex-col sm:flex-row items-center gap-4">
-                <div className="w-20 h-20 rounded-2xl bg-white border border-slate-300 flex items-center justify-center p-2 shadow-inner overflow-hidden flex-shrink-0">
+                <div className="w-16 h-16 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {logoPreviewValid ? (
                     <img
                       src={strLogo}
@@ -378,7 +425,7 @@ export default function AdminProfilPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Alamat Lengkap
+                Alamat Lengkap Masjid
               </label>
               <textarea
                 value={safeStr(alamat)}
