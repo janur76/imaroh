@@ -11,6 +11,7 @@ interface Transaction {
   jenis?: string;
   nominal?: number | string;
   bukti_url?: string;
+  pencatat?: string;
   [key: string]: any;
 }
 
@@ -38,6 +39,7 @@ async function postImarohAction(payload: Record<string, unknown>) {
     message?: string;
     id?: string;
     bukti_url?: string;
+    pencatat?: string;
   };
 
   if (!res.ok || !data.ok) {
@@ -139,6 +141,7 @@ export default function AdminDashboard() {
   const [notaPreview, setNotaPreview] = useState("");
   const [notaName, setNotaName] = useState("");
   const [processingNota, setProcessingNota] = useState(false);
+  const [pencatatAktif, setPencatatAktif] = useState("Admin DKM");
 
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -252,6 +255,31 @@ export default function AdminDashboard() {
   useEffect(() => {
     setPrintMeta(createPrintStamp());
     loadDataKas();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/session", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const label =
+          data?.user?.email ||
+          data?.email ||
+          data?.user?.nama ||
+          data?.nama ||
+          "";
+        if (active && String(label).trim()) {
+          setPencatatAktif(String(label).trim());
+        }
+      } catch {
+        // Fallback tetap menggunakan 'Admin DKM'
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -401,6 +429,7 @@ export default function AdminDashboard() {
         nominal: nilaiNominal,
         keterangan: ket,
         tanggal,
+        pencatat: pencatatAktif,
       };
       if (notaPreview) {
         payload.bukti_base64 = notaPreview;
@@ -438,6 +467,7 @@ export default function AdminDashboard() {
         keterangan: editingTx.keterangan,
         jenis: editingTx.jenis,
         nominal: Number(editingTx.nominal),
+        pencatat: pencatatAktif,
       };
 
       if (editNotaPreview) {
@@ -772,6 +802,12 @@ export default function AdminDashboard() {
                 <div className="flex justify-between">
                   <span className="text-slate-600 font-medium">Penyimpanan Bukti Nota:</span>
                   <span className="text-[#047857] font-semibold">Google Drive (IMAROH_BUKTI_NOTA)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600 font-medium">Pencatat Aktif:</span>
+                  <span className="text-[#047857] font-semibold truncate max-w-[200px]">
+                    {pencatatAktif}
+                  </span>
                 </div>
               </div>
             </div>
