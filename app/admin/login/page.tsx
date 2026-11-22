@@ -1,7 +1,32 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        id?: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential?: string }) => void;
+          }) => void;
+          renderButton: (
+            parent: HTMLElement,
+            options: {
+              theme?: "outline" | "filled_blue" | "filled_black";
+              size?: "large" | "medium" | "small";
+              text?: "signin_with" | "signup_with" | "continue_with" | "signin";
+              shape?: "rectangular" | "pill" | "circle" | "square";
+              width?: number;
+            }
+          ) => void;
+        };
+      };
+    };
+  }
+}
 
 function sanitizeNextPath(rawNext: string | null): string {
   if (!rawNext) return "/admin";
@@ -16,27 +41,23 @@ function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = sanitizeNextPath(searchParams.get("next"));
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+
+  const googleClientId = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "").trim();
 
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitAuthPayload = async (payload: { email?: string; credential?: string }) => {
     setErrorMsg("");
-
-    const cleanEmail = email.trim();
-    if (!cleanEmail) {
-      setErrorMsg("Masukkan alamat email pengurus yang terdaftar.");
-      return;
-    }
-
     setSubmitting(true);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
 
@@ -53,6 +74,69 @@ function LoginFormContent() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  useEffect(() => {
+    if (!googleClientId) return;
+
+    const renderGoogleBtn = () => {
+      if (!googleButtonRef.current || !window.google?.accounts?.id) return;
+      googleButtonRef.current.innerHTML = "";
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response) => {
+          if (response?.credential) {
+            void submitAuthPayload({ credential: response.credential });
+          } else {
+            setErrorMsg("Tidak menerima token kredensial dari Google.");
+          }
+        },
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline",
+        size: "large",
+        text: "continue_with",
+        shape: "pill",
+        width: 320,
+      });
+      setGoogleReady(true);
+    };
+
+    if (window.google?.accounts?.id) {
+      renderGoogleBtn();
+      return;
+    }
+
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      'script[src="https://accounts.google.com/gsi/client"]'
+    );
+    if (existingScript) {
+      existingScript.addEventListener("load", renderGoogleBtn);
+      return () => {
+        existingScript.removeEventListener("load", renderGoogleBtn);
+      };
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = renderGoogleBtn;
+    document.head.appendChild(script);
+
+    return () => {
+      script.onload = null;
+    };
+  }, [googleClientId]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setErrorMsg("Masukkan alamat email pengurus yang terdaftar.");
+      return;
+    }
+    await submitAuthPayload({ email: cleanEmail });
   };
 
   return (
@@ -89,6 +173,27 @@ function LoginFormContent() {
         {errorMsg && (
           <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-300/35 text-rose-100 text-xs font-medium">
             {errorMsg}
+          </div>
+        )}
+
+        {/* Tombol Google Sign-In */}
+        {googleClientId && (
+          <div className="space-y-3">
+            <div className="flex justify-center min-h-[44px] items-center">
+              <div ref={googleButtonRef} />
+            </div>
+            {!googleReady && (
+              <p className="text-center text-[11px] text-emerald-100/75">
+                Menyiapkan tombol Masuk dengan Google...
+              </p>
+            )}
+            <div className="relative flex items-center py-1">
+              <div className="flex-grow border-t border-white/15" />
+              <span className="px-3 text-[11px] uppercase tracking-wider text-emerald-100/70">
+                atau email terdaftar
+              </span>
+              <div className="flex-grow border-t border-white/15" />
+            </div>
           </div>
         )}
 
