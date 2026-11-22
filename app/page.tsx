@@ -4,6 +4,27 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
+function splitNamaDanLokasi(rawNama?: string, rawAlamat?: string) {
+  const cleanNama = String(rawNama || "Masjid Baitul Mu'minin").trim();
+  const cleanAlamat = String(rawAlamat || "").trim();
+
+  if (cleanAlamat) {
+    return { nama: cleanNama, lokasi: cleanAlamat };
+  }
+
+  const marker = "Citra Mandiri Regency";
+  const idx = cleanNama.toLowerCase().indexOf(marker.toLowerCase());
+  if (idx > 0) {
+    const namaSaja = cleanNama.slice(0, idx).trim();
+    const lokasiSaja = cleanNama.slice(idx).trim();
+    if (namaSaja && lokasiSaja) {
+      return { nama: namaSaja, lokasi: lokasiSaja };
+    }
+  }
+
+  return { nama: cleanNama, lokasi: "" };
+}
+
 export default function PublicPortal() {
   const router = useRouter();
   const [profil, setProfil] = useState<any>({});
@@ -51,26 +72,38 @@ export default function PublicPortal() {
   });
   const saldoBersih = totalMasuk - totalKeluar;
 
+  const { nama: namaMasjidHeader, lokasi: lokasiMasjidHeader } = splitNamaDanLokasi(
+    profil.nama_masjid,
+    profil.alamat
+  );
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f0fdf4] via-[#f8f9ff] to-[#f0fdf4] text-[#0b1c30]">
       {/* Top Navbar Publik */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-emerald-100 px-4 md:px-8 py-3 md:py-4 shadow-sm">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-emerald-100 px-4 md:px-8 py-3 md:py-3.5 shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2.5 sm:gap-4">
-          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center p-1 shadow-inner overflow-hidden shrink-0">
-              {profil.logo_url ? (
-                <img src={profil.logo_url} alt="Logo Masjid" className="w-full h-full object-contain" />
-              ) : (
-                <span className="text-xl">🕌</span>
-              )}
-            </div>
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+            {profil.logo_url ? (
+              <img
+                src={profil.logo_url}
+                alt="Logo Masjid"
+                className="w-11 h-11 sm:w-12 sm:h-12 object-contain shrink-0"
+              />
+            ) : (
+              <span className="text-2xl sm:text-3xl leading-none shrink-0">🕌</span>
+            )}
             <div className="min-w-0">
               <span className="inline-block text-[9px] sm:text-[10px] font-bold tracking-wider sm:tracking-widest text-[#047857] uppercase bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 truncate max-w-full">
                 Portal Resmi Masjid Digital
               </span>
-              <h1 className="text-sm sm:text-lg md:text-xl font-extrabold text-[#0b1c30] mt-0.5 leading-snug line-clamp-2">
-                {profil.nama_masjid || "Masjid Baitul Mu'minin"}
+              <h1 className="text-base sm:text-lg md:text-xl font-extrabold text-[#0b1c30] mt-0.5 leading-tight truncate">
+                {namaMasjidHeader}
               </h1>
+              {lokasiMasjidHeader && (
+                <p className="text-[11px] sm:text-xs font-medium text-slate-500 leading-tight mt-0.5 truncate">
+                  {lokasiMasjidHeader}
+                </p>
+              )}
             </div>
           </div>
 
