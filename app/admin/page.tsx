@@ -83,7 +83,6 @@ async function compressNotaImage(file: File): Promise<string> {
         const qualities = [0.78, 0.65, 0.52];
         for (const q of qualities) {
           const out = canvas.toDataURL("image/jpeg", q);
-          // Batasi ukuran payload agar unggah ke Apps Script cepat & lancar di sinyal HP
           if (out.length <= 1_900_000) {
             resolve(out);
             return;
@@ -131,6 +130,8 @@ export default function AdminDashboard() {
   const router = useRouter();
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const editCameraInputRef = useRef<HTMLInputElement | null>(null);
+  const editGalleryInputRef = useRef<HTMLInputElement | null>(null);
 
   const [jenis, setJenis] = useState("masuk");
   const [nominal, setNominal] = useState("");
@@ -157,8 +158,14 @@ export default function AdminDashboard() {
   const [filterBulan, setFilterBulan] = useState("semua");
   const [filterJenis, setFilterJenis] = useState("semua");
 
-  // State untuk Modal Edit Transaksi & Modal Lihat Nota
+  // State untuk Modal Edit Transaksi & Nota Edit
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [editNotaPreview, setEditNotaPreview] = useState("");
+  const [editNotaName, setEditNotaName] = useState("");
+  const [editHapusBukti, setEditHapusBukti] = useState(false);
+  const [processingEditNota, setProcessingEditNota] = useState(false);
+
+  // State untuk Modal Lihat Nota
   const [viewingNota, setViewingNota] = useState<{
     url: string;
     title: string;
@@ -174,7 +181,6 @@ export default function AdminDashboard() {
   const GOOGLE_SHEETS_URL =
     "https://docs.google.com/spreadsheets/d/1v4ckXNCDzC749ecoLLaaAch4Fbfw7bWr6tirfYgYMfw/edit?gid=501383615#gid=501383615";
 
-  // Fungsi untuk memuat data transaksi & profil dari Sheets
   const loadDataKas = async () => {
     try {
       setLoadingData(true);
@@ -296,6 +302,69 @@ export default function AdminDashboard() {
     if (galleryInputRef.current) galleryInputRef.current.value = "";
   };
 
+  const handleOpenEditModal = (item: Transaction) => {
+    setEditingTx({
+      ...item,
+      jenis: String(item.jenis || "").toLowerCase().includes("keluar") ? "keluar" : "masuk",
+    });
+    setEditNotaPreview("");
+    setEditNotaName("");
+    setEditHapusBukti(false);
+  };
+
+  const handleCloseEditModal = () => {
+    setEditingTx(null);
+    setEditNotaPreview("");
+    setEditNotaName("");
+    setEditHapusBukti(false);
+    if (editCameraInputRef.current) editCameraInputRef.current.value = "";
+    if (editGalleryInputRef.current) editGalleryInputRef.current.value = "";
+  };
+
+  const handleEditNotaSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Pilih file gambar foto nota (JPG, PNG, atau WEBP).");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Ukuran file foto nota maksimal 10MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setProcessingEditNota(true);
+    try {
+      const compressed = await compressNotaImage(file);
+      setEditNotaPreview(compressed);
+      setEditNotaName(file.name || "foto-nota-baru.jpg");
+      setEditHapusBukti(false);
+    } catch (err) {
+      console.error("Gagal memproses foto nota edit:", err);
+      alert(err instanceof Error ? err.message : "Gagal memproses foto nota.");
+    } finally {
+      setProcessingEditNota(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleClearEditNota = () => {
+    if (editNotaPreview) {
+      setEditNotaPreview("");
+      setEditNotaName("");
+      if (editCameraInputRef.current) editCameraInputRef.current.value = "";
+      if (editGalleryInputRef.current) editGalleryInputRef.current.value = "";
+      return;
+    }
+    if (editingTx?.bukti_url) {
+      setEditHapusBukti(true);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -355,9 +424,14 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!editingTx) return;
 
+    if (processingEditNota) {
+      alert("Tunggu sebentar, foto nota baru sedang diproses...");
+      return;
+    }
+
     setSavingEdit(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         action: "editKas",
         id_transaksi: editingTx.id_transaksi,
         tanggal: editingTx.tanggal ? String(editingTx.tanggal).split("T")[0] : "",
@@ -366,9 +440,15 @@ export default function AdminDashboard() {
         nominal: Number(editingTx.nominal),
       };
 
+      if (editNotaPreview) {
+        payload.bukti_base64 = editNotaPreview;
+      } else if (editHapusBukti) {
+        payload.hapus_bukti = true;
+      }
+
       const res = await postImarohAction(payload);
       alert(res.message || "Transaksi kas berhasil diperbarui.");
-      setEditingTx(null);
+      handleCloseEditModal();
       await loadDataKas();
     } catch (error) {
       console.error("Gagal memperbarui transaksi:", error);
@@ -453,7 +533,6 @@ export default function AdminDashboard() {
 
     setTimeout(() => {
       window.print();
-      // Fallback jika event afterprint tidak dipicu pada beberapa browser
       setTimeout(restoreTitle, 1500);
     }, 50);
   };
@@ -461,6 +540,12 @@ export default function AdminDashboard() {
   const namaMasjidJudul = (profil.nama_masjid || "MASJID BAITUL MU'MININ").toUpperCase();
   const alamatMasjid = profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo";
   const logoMasjid = profil.logo_url || "/logo_mbm.png";
+
+  const activeEditNotaUrl = editNotaPreview
+    ? editNotaPreview
+    : !editHapusBukti && editingTx?.bukti_url
+    ? String(editingTx.bukti_url)
+    : "";
 
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8 print:bg-white print:p-0">
@@ -876,7 +961,7 @@ export default function AdminDashboard() {
                       <td className="print:hidden p-3 text-center space-x-2 whitespace-nowrap">
                         <button
                           type="button"
-                          onClick={() => setEditingTx(item)}
+                          onClick={() => handleOpenEditModal(item)}
                           className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition shadow-sm"
                         >
                           Edit
@@ -906,8 +991,8 @@ export default function AdminDashboard() {
 
       {/* MODAL EDIT */}
       {editingTx && (
-        <div className="print:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-slate-800">
+        <div className="print:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-slate-800 my-auto">
             <h3 className="text-lg font-bold text-[#0b1c30] mb-1">Edit Transaksi</h3>
             <p className="text-xs text-slate-500 mb-4 font-mono">ID: {editingTx.id_transaksi}</p>
 
@@ -962,20 +1047,113 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              {/* Fitur Ganti / Tambah / Hapus Foto Nota di Modal Edit */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Bukti / Foto Nota
+                  </label>
+                  {activeEditNotaUrl && (
+                    <button
+                      type="button"
+                      onClick={handleClearEditNota}
+                      className="text-[11px] font-semibold text-rose-600 hover:text-rose-700"
+                    >
+                      {editNotaPreview ? "Batalkan Foto Baru" : "Hapus Nota"}
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  ref={editCameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleEditNotaSelected}
+                  className="hidden"
+                />
+                <input
+                  ref={editGalleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleEditNotaSelected}
+                  className="hidden"
+                />
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={processingEditNota}
+                    onClick={() => editCameraInputRef.current?.click()}
+                    className="py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#047857] border border-emerald-200 text-xs font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span>📷</span>
+                    <span>Jepret Kamera</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={processingEditNota}
+                    onClick={() => editGalleryInputRef.current?.click()}
+                    className="py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span>🖼️</span>
+                    <span>Upload Nota</span>
+                  </button>
+                </div>
+
+                {processingEditNota && (
+                  <p className="text-[11px] text-emerald-700 font-medium">
+                    Mengompresi foto nota baru...
+                  </p>
+                )}
+
+                {activeEditNotaUrl ? (
+                  <div className="flex items-center gap-3 pt-1">
+                    <img
+                      src={activeEditNotaUrl}
+                      alt="Preview Foto Nota"
+                      className="w-14 h-14 object-cover rounded-lg border border-slate-300 bg-white shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-800 truncate">
+                        {editNotaPreview
+                          ? editNotaName || "Foto Nota Pengganti"
+                          : "Nota Tersimpan Saat Ini"}
+                      </p>
+                      <p className="text-[11px] text-emerald-700">
+                        {editNotaPreview
+                          ? "Akan menggantikan nota lama saat disimpan."
+                          : "Klik Jepret Kamera / Upload Nota jika ingin mengganti."}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500">
+                    {editHapusBukti
+                      ? "Nota akan dihapus dari transaksi ini saat disimpan."
+                      : "Belum ada foto nota terlampir pada transaksi ini."}
+                  </p>
+                )}
+              </div>
+
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setEditingTx(null)}
+                  onClick={handleCloseEditModal}
                   className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  disabled={savingEdit}
+                  disabled={savingEdit || processingEditNota}
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition disabled:opacity-50"
                 >
-                  {savingEdit ? "Menyimpan..." : "Simpan Perubahan"}
+                  {savingEdit
+                    ? "Menyimpan..."
+                    : processingEditNota
+                    ? "Memproses Nota..."
+                    : "Simpan Perubahan"}
                 </button>
               </div>
             </form>
