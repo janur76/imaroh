@@ -1,8 +1,7 @@
-import crypto from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { IMAROH_APPS_SCRIPT_URL } from "@/lib/api";
-import { ADMIN_COOKIE_NAME } from "@/lib/auth";
+import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 
 const ALLOWED_ACTIONS = new Set([
   "tambahKas",
@@ -17,73 +16,6 @@ const ALLOWED_ACTIONS = new Set([
   "updateProfil",
 ]);
 
-function getSessionSecret(): string {
-  return (
-    process.env.AUTH_SECRET ||
-    process.env.SESSION_SECRET ||
-    process.env.APPS_SCRIPT_SECRET ||
-    process.env.API_SECRET ||
-    process.env.IMAROH_API_SECRET ||
-    ""
-  ).trim();
-}
-
-function extractEmailFromCookieValue(rawCookie: string | undefined): string {
-  if (!rawCookie) return "";
-  const trimmed = rawCookie.trim();
-  if (!trimmed) return "";
-
-  const secret = getSessionSecret();
-
-  // Format 1: payloadBase64.signature (HMAC-SHA256)
-  const dotIdx = trimmed.indexOf(".");
-  if (dotIdx > 0 && secret) {
-    const payloadPart = trimmed.slice(0, dotIdx);
-    const sigPart = trimmed.slice(dotIdx + 1);
-    const expectedSig = crypto
-      .createHmac("sha256", secret)
-      .update(payloadPart)
-      .digest("base64url");
-    const expectedSigHex = crypto
-      .createHmac("sha256", secret)
-      .update(payloadPart)
-      .digest("hex");
-
-    const sigValid =
-      sigPart === expectedSig || sigPart.toLowerCase() === expectedSigHex.toLowerCase();
-
-    if (sigValid) {
-      try {
-        const decoded = Buffer.from(payloadPart, "base64url").toString("utf8");
-        if (decoded.includes("@") && !decoded.startsWith("{")) {
-          return decoded.trim().toLowerCase();
-        }
-        const parsed = JSON.parse(decoded) as { email?: unknown; exp?: unknown };
-        if (typeof parsed?.exp === "number" && parsed.exp < Date.now()) {
-          return "";
-        }
-        if (typeof parsed?.email === "string" && parsed.email.includes("@")) {
-          return parsed.email.trim().toLowerCase();
-        }
-      } catch {
-        // lanjut cek format lain jika bukan JSON base64url
-      }
-    }
-  }
-
-  // Format 2: JSON string langsung jika tidak pakai titik pemisah
-  try {
-    const parsed = JSON.parse(trimmed) as { email?: unknown };
-    if (typeof parsed?.email === "string" && parsed.email.includes("@")) {
-      return parsed.email.trim().toLowerCase();
-    }
-  } catch {
-    // bukan JSON langsung
-  }
-
-  return "";
-}
-
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -97,8 +29,9 @@ export async function POST(request: Request) {
     }
 
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
-    const sessionEmail = extractEmailFromCookieValue(sessionCookie);
+    const rawSessionCookie = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+    const session = verifySessionToken(rawSessionCookie);
+    const sessionEmail = session?.email ? session.email.trim().toLowerCase() : "";
 
     const scriptUrl =
       process.env.APPS_SCRIPT_URL ||
