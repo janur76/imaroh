@@ -4,41 +4,43 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
-const TEMPAT_MASJID_STORAGE_KEY = "imaroh_tempat_masjid_header";
-
-function resolveHeaderInfo(rawNama?: string, rawAlamat?: string, storedTempat?: string) {
+function resolveHeaderDanAlamat(rawNama?: string, rawAlamat?: string) {
   const cleanNama = String(rawNama || "Masjid Baitul Mu'minin").trim();
-  const cleanStored = String(storedTempat || "").trim();
-
-  if (cleanStored) {
-    return { nama: cleanNama, lokasi: cleanStored };
-  }
+  const cleanAlamat = String(rawAlamat || "").trim();
 
   const marker = "Citra Mandiri Regency";
   const idx = cleanNama.toLowerCase().indexOf(marker.toLowerCase());
-  if (idx > 0) {
+  if (idx > 0 && !cleanAlamat) {
     const namaSaja = cleanNama.slice(0, idx).trim();
     const lokasiSaja = cleanNama.slice(idx).trim();
     if (namaSaja && lokasiSaja) {
-      return { nama: namaSaja, lokasi: lokasiSaja };
+      return {
+        nama: namaSaja,
+        lokasi: lokasiSaja,
+        alamatLengkap: lokasiSaja,
+      };
     }
   }
 
-  const cleanAlamat = String(rawAlamat || "").trim();
   if (cleanAlamat) {
-    const firstSegment = cleanAlamat.split(",")[0]?.trim();
-    if (firstSegment) {
-      return { nama: cleanNama, lokasi: firstSegment };
-    }
+    const firstSegment = cleanAlamat.split(",")[0]?.trim() || "";
+    return {
+      nama: cleanNama,
+      lokasi: firstSegment,
+      alamatLengkap: cleanAlamat,
+    };
   }
 
-  return { nama: cleanNama, lokasi: "" };
+  return {
+    nama: cleanNama,
+    lokasi: "",
+    alamatLengkap: "Perum Citra Mandiri Regency, Sidoarjo",
+  };
 }
 
 export default function PublicPortal() {
   const router = useRouter();
   const [profil, setProfil] = useState<any>({});
-  const [storedTempat, setStoredTempat] = useState<string>("");
   const [kasList, setKasList] = useState<any[]>([]);
   const [inventarisList, setInventarisList] = useState<any[]>([]);
   const [kajianList, setKajianList] = useState<any[]>([]);
@@ -46,10 +48,6 @@ export default function PublicPortal() {
 
   const loadPublicData = async () => {
     try {
-      if (typeof window !== "undefined") {
-        setStoredTempat(String(window.localStorage.getItem(TEMPAT_MASJID_STORAGE_KEY) || "").trim());
-      }
-
       const data = await fetchImarohData("all");
       if (data) {
         if (data.profil && data.profil.length > 0) {
@@ -87,11 +85,11 @@ export default function PublicPortal() {
   });
   const saldoBersih = totalMasuk - totalKeluar;
 
-  const { nama: namaMasjidHeader, lokasi: lokasiMasjidHeader } = resolveHeaderInfo(
-    profil.nama_masjid,
-    profil.alamat,
-    storedTempat
-  );
+  const {
+    nama: namaMasjidHeader,
+    lokasi: lokasiMasjidHeader,
+    alamatLengkap: alamatMasjidLengkap,
+  } = resolveHeaderDanAlamat(profil.nama_masjid, profil.alamat);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f0fdf4] via-[#f8f9ff] to-[#f0fdf4] text-[#0b1c30]">
@@ -162,7 +160,7 @@ export default function PublicPortal() {
             <div className="flex items-center shrink-0">
               <span>📢 {profil.running_text}</span>
               <span className="mx-8">&bull;</span>
-              <span>📍 {profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo"}</span>
+              <span>📍 {alamatMasjidLengkap}</span>
               <span className="mx-8">&bull;</span>
               <span>🕌 Selamat Datang di Portal Resmi Masjid Digital Baitul Mu&apos;minin</span>
               <span className="mx-8">&bull;</span>
@@ -171,7 +169,7 @@ export default function PublicPortal() {
             <div className="flex items-center shrink-0" aria-hidden="true">
               <span>📢 {profil.running_text}</span>
               <span className="mx-8">&bull;</span>
-              <span>📍 {profil.alamat || "Perum Citra Mandiri Regency, Sidoarjo"}</span>
+              <span>📍 {alamatMasjidLengkap}</span>
               <span className="mx-8">&bull;</span>
               <span>🕌 Selamat Datang di Portal Resmi Masjid Digital Baitul Mu&apos;minin</span>
               <span className="mx-8">&bull;</span>
