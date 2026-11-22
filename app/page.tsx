@@ -4,12 +4,14 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
-function splitNamaDanLokasi(rawNama?: string, rawAlamat?: string) {
-  const cleanNama = String(rawNama || "Masjid Baitul Mu'minin").trim();
-  const cleanAlamat = String(rawAlamat || "").trim();
+const TEMPAT_MASJID_STORAGE_KEY = "imaroh_tempat_masjid_header";
 
-  if (cleanAlamat) {
-    return { nama: cleanNama, lokasi: cleanAlamat };
+function resolveHeaderInfo(rawNama?: string, rawAlamat?: string, storedTempat?: string) {
+  const cleanNama = String(rawNama || "Masjid Baitul Mu'minin").trim();
+  const cleanStored = String(storedTempat || "").trim();
+
+  if (cleanStored) {
+    return { nama: cleanNama, lokasi: cleanStored };
   }
 
   const marker = "Citra Mandiri Regency";
@@ -22,12 +24,21 @@ function splitNamaDanLokasi(rawNama?: string, rawAlamat?: string) {
     }
   }
 
+  const cleanAlamat = String(rawAlamat || "").trim();
+  if (cleanAlamat) {
+    const firstSegment = cleanAlamat.split(",")[0]?.trim();
+    if (firstSegment) {
+      return { nama: cleanNama, lokasi: firstSegment };
+    }
+  }
+
   return { nama: cleanNama, lokasi: "" };
 }
 
 export default function PublicPortal() {
   const router = useRouter();
   const [profil, setProfil] = useState<any>({});
+  const [storedTempat, setStoredTempat] = useState<string>("");
   const [kasList, setKasList] = useState<any[]>([]);
   const [inventarisList, setInventarisList] = useState<any[]>([]);
   const [kajianList, setKajianList] = useState<any[]>([]);
@@ -35,6 +46,10 @@ export default function PublicPortal() {
 
   const loadPublicData = async () => {
     try {
+      if (typeof window !== "undefined") {
+        setStoredTempat(String(window.localStorage.getItem(TEMPAT_MASJID_STORAGE_KEY) || "").trim());
+      }
+
       const data = await fetchImarohData("all");
       if (data) {
         if (data.profil && data.profil.length > 0) {
@@ -72,9 +87,10 @@ export default function PublicPortal() {
   });
   const saldoBersih = totalMasuk - totalKeluar;
 
-  const { nama: namaMasjidHeader, lokasi: lokasiMasjidHeader } = splitNamaDanLokasi(
+  const { nama: namaMasjidHeader, lokasi: lokasiMasjidHeader } = resolveHeaderInfo(
     profil.nama_masjid,
-    profil.alamat
+    profil.alamat,
+    storedTempat
   );
 
   return (
