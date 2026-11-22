@@ -305,6 +305,16 @@ export default function AdminDashboard() {
     0
   );
 
+  const totalMasukFilter = filteredTransaksi.reduce((acc, item) => {
+    const j = String(item.jenis || "").toLowerCase();
+    return j.includes("masuk") ? acc + Number(item.nominal || 0) : acc;
+  }, 0);
+
+  const totalKeluarFilter = filteredTransaksi.reduce((acc, item) => {
+    const j = String(item.jenis || "").toLowerCase();
+    return j.includes("keluar") ? acc + Number(item.nominal || 0) : acc;
+  }, 0);
+
   const daftarBulanUnik = Array.from(
     new Set(
       transaksiList
@@ -316,10 +326,24 @@ export default function AdminDashboard() {
     .reverse();
 
   const handleCetakLaporan = () => {
-    setPrintMeta(createPrintStamp());
+    const freshStamp = createPrintStamp();
+    setPrintMeta(freshStamp);
+
+    const originalTitle = document.title;
+    document.title = freshStamp.code;
+
+    const restoreTitle = () => {
+      document.title = originalTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+
+    window.addEventListener("afterprint", restoreTitle);
+
     setTimeout(() => {
       window.print();
-    }, 30);
+      // Fallback jika event afterprint tidak dipicu pada beberapa browser
+      setTimeout(restoreTitle, 1500);
+    }, 50);
   };
 
   const namaMasjidJudul = (profil.nama_masjid || "MASJID BAITUL MU'MININ").toUpperCase();
@@ -553,16 +577,34 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-between items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs print:bg-white">
+          <div className="flex flex-wrap justify-between items-start gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs print:bg-white">
             <span className="text-slate-600 font-medium">
               Menampilkan <strong className="text-slate-900">{filteredTransaksi.length}</strong> transaksi
             </span>
-            <span className="text-slate-600 font-medium">
-              Total Nominal Filter:{" "}
-              <strong className="text-[#047857]">
-                Rp {totalNominalFilter.toLocaleString("id-ID")}
-              </strong>
-            </span>
+            <div className="text-right space-y-1">
+              <div className="text-slate-600 font-medium">
+                Total Nominal Filter:{" "}
+                <strong className="text-[#047857]">
+                  Rp {totalNominalFilter.toLocaleString("id-ID")}
+                </strong>
+              </div>
+              {filterJenis === "semua" && (
+                <div className="flex flex-wrap justify-end gap-x-4 gap-y-0.5 text-[11px] text-slate-600">
+                  <span>
+                    Total Masuk:{" "}
+                    <strong className="text-[#047857]">
+                      Rp {totalMasukFilter.toLocaleString("id-ID")}
+                    </strong>
+                  </span>
+                  <span>
+                    Total Keluar:{" "}
+                    <strong className="text-rose-600">
+                      Rp {totalKeluarFilter.toLocaleString("id-ID")}
+                    </strong>
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="overflow-x-auto print:overflow-visible">
