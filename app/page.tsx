@@ -289,7 +289,19 @@ export default function PublicPortal() {
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 text-center space-y-3">
               <h3 className="font-extrabold text-sm text-[#0b1c30]">💳 QRIS Donasi / Infak</h3>
-              <p className="text-[11px] text-slate-500">
+
+              {/* Blok Identitas Merchant QRIS (di bawah judul, di atas petunjuk scan) */}
+              <div className="rounded-2xl bg-slate-50/90 border border-slate-200/80 px-3.5 py-3 text-center space-y-1">
+                <p className="font-serif text-sm sm:text-base font-bold tracking-wide text-slate-900 uppercase">
+                  MASJID BAITUL MUMININ
+                </p>
+                <div className="space-y-0.5 text-[11px] font-medium text-slate-600 tabular-nums">
+                  <p>NMID : ID1025406969317</p>
+                  <p>TID</p>
+                </div>
+              </div>
+
+              <p className="text-[11px] leading-relaxed text-slate-500">
                 Scan QRIS di bawah ini untuk menyalurkan infak atau donasi ke masjid secara nontunai.
               </p>
 
@@ -297,7 +309,7 @@ export default function PublicPortal() {
                 {profil.qris_url ? (
                   <img
                     src={profil.qris_url}
-                    alt="QRIS Donasi Masjid"
+                    alt="QRIS Donasi Masjid Baitul Muminin"
                     className="w-full h-full object-contain"
                   />
                 ) : (
