@@ -27,6 +27,15 @@ const JENIS_BARANG_OPTIONS: JenisBarangOption[] = [
   { label: "Inventaris Lainnya", prefix: "MBM-LN-", contoh: "MBM-LN-001" },
 ];
 
+const DEFAULT_LOKASI_SARAN = [
+  "Ruang Utama Masjid",
+  "Ruang Shalat Utama",
+  "Ruang Sound System",
+  "Ruang Operator Masjid",
+  "Gudang",
+  "Kantor Takmir",
+];
+
 async function postImarohAction(payload: Record<string, unknown>) {
   const res = await fetch("/api/imaroh", {
     method: "POST",
@@ -95,7 +104,7 @@ export default function AdminInventaris() {
     loadDataInventaris();
   }, []);
 
-  // Daftar opsi lokasi unik dari data yang ada
+  // Daftar opsi lokasi unik dari data yang ada (untuk filter)
   const lokasiOptions = useMemo(() => {
     const setLok = new Set<string>();
     inventarisList.forEach((item) => {
@@ -104,6 +113,13 @@ export default function AdminInventaris() {
     });
     return Array.from(setLok).sort((a, b) => a.localeCompare(b, "id"));
   }, [inventarisList]);
+
+  // Daftar saran lokasi untuk input tambah/edit (gabungan data existing + saran umum)
+  const lokasiSaranInput = useMemo(() => {
+    const setSaran = new Set<string>(DEFAULT_LOKASI_SARAN);
+    lokasiOptions.forEach((lok) => setSaran.add(lok));
+    return Array.from(setSaran);
+  }, [lokasiOptions]);
 
   // Daftar opsi kondisi unik (gabungan bawaan + data yang ada)
   const kondisiOptions = useMemo(() => {
@@ -185,7 +201,7 @@ export default function AdminInventaris() {
         nama_barang: namaBarang,
         jumlah: Number(jumlah),
         kondisi: kondisi,
-        lokasi: lokasi,
+        lokasi: lokasi.trim() || "Ruang Utama Masjid",
       });
 
       alert(
@@ -215,7 +231,7 @@ export default function AdminInventaris() {
         nama_barang: editingItem.nama_barang,
         jumlah: Number(editingItem.jumlah),
         kondisi: editingItem.kondisi,
-        lokasi: editingItem.lokasi,
+        lokasi: String(editingItem.lokasi || "").trim() || "Ruang Utama Masjid",
       });
 
       alert(res.message || "Barang inventaris berhasil diperbarui.");
@@ -248,6 +264,12 @@ export default function AdminInventaris() {
 
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
+      <datalist id="lokasi-inventaris-saran">
+        {lokasiSaranInput.map((lok) => (
+          <option key={lok} value={lok} />
+        ))}
+      </datalist>
+
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Top Bar */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -353,12 +375,32 @@ export default function AdminInventaris() {
                 </label>
                 <input
                   type="text"
+                  list="lokasi-inventaris-saran"
                   value={lokasi}
                   onChange={(e) => setLokasi(e.target.value)}
-                  placeholder="Ruang Utama Masjid"
+                  placeholder="Ketik lokasi baru atau pilih saran di bawah"
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   required
                 />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {lokasiSaranInput.map((lok) => {
+                    const active = lokasi.trim().toLowerCase() === lok.toLowerCase();
+                    return (
+                      <button
+                        key={lok}
+                        type="button"
+                        onClick={() => setLokasi(lok)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition border ${
+                          active
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border-slate-200"
+                        }`}
+                      >
+                        {lok}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <button
@@ -611,6 +653,7 @@ export default function AdminInventaris() {
                 <label className="block text-xs font-medium text-slate-700 mb-1">Lokasi</label>
                 <input
                   type="text"
+                  list="lokasi-inventaris-saran"
                   value={editingItem.lokasi || ""}
                   onChange={(e) => setEditingItem({ ...editingItem, lokasi: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
