@@ -106,19 +106,31 @@ export default function AdminInventaris() {
 
   // Daftar opsi lokasi unik dari data yang ada (untuk filter)
   const lokasiOptions = useMemo(() => {
-    const setLok = new Set<string>();
+    const mapLok = new Map<string, string>();
     inventarisList.forEach((item) => {
       const lok = String(item.lokasi || "").trim();
-      if (lok) setLok.add(lok);
+      if (!lok) return;
+      const key = lok.toLowerCase();
+      if (!mapLok.has(key)) mapLok.set(key, lok);
     });
-    return Array.from(setLok).sort((a, b) => a.localeCompare(b, "id"));
+    return Array.from(mapLok.values()).sort((a, b) => a.localeCompare(b, "id"));
   }, [inventarisList]);
 
-  // Daftar saran lokasi untuk input tambah/edit (gabungan data existing + saran umum)
+  // Daftar saran lokasi untuk input tambah & edit (bebas duplikat case-insensitive)
   const lokasiSaranInput = useMemo(() => {
-    const setSaran = new Set<string>(DEFAULT_LOKASI_SARAN);
-    lokasiOptions.forEach((lok) => setSaran.add(lok));
-    return Array.from(setSaran);
+    const mapSaran = new Map<string, string>();
+    DEFAULT_LOKASI_SARAN.forEach((lok) => {
+      const clean = lok.trim();
+      if (clean) mapSaran.set(clean.toLowerCase(), clean);
+    });
+    lokasiOptions.forEach((lok) => {
+      const clean = lok.trim();
+      const key = clean.toLowerCase();
+      if (clean && !mapSaran.has(key)) {
+        mapSaran.set(key, clean);
+      }
+    });
+    return Array.from(mapSaran.values());
   }, [lokasiOptions]);
 
   // Daftar opsi kondisi unik (gabungan bawaan + data yang ada)
@@ -154,7 +166,7 @@ export default function AdminInventaris() {
         return false;
       }
 
-      if (filterLokasi !== "ALL" && lokVal !== filterLokasi) {
+      if (filterLokasi !== "ALL" && lokVal.toLowerCase() !== filterLokasi.toLowerCase()) {
         return false;
       }
 
@@ -659,6 +671,26 @@ export default function AdminInventaris() {
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   required
                 />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {lokasiSaranInput.map((lok) => {
+                    const active =
+                      String(editingItem.lokasi || "").trim().toLowerCase() === lok.toLowerCase();
+                    return (
+                      <button
+                        key={lok}
+                        type="button"
+                        onClick={() => setEditingItem({ ...editingItem, lokasi: lok })}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition border ${
+                          active
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border-slate-200"
+                        }`}
+                      >
+                        {lok}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
