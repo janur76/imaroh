@@ -36,6 +36,30 @@ const DEFAULT_LOKASI_SARAN = [
   "Kantor Takmir",
 ];
 
+function detectJenisFromIdOrName(idBarang?: string, namaBarang?: string): string {
+  const id = String(idBarang || "").trim().toUpperCase();
+  if (id.startsWith("MBM-EL-")) return "Elektronik";
+  if (id.startsWith("MBM-IB-")) return "Perlengkapan Ibadah";
+  if (id.startsWith("MBM-FN-")) return "Furnitur & Mebel";
+  if (id.startsWith("MBM-OP-")) return "Kebersihan & Operasional";
+  if (id.startsWith("MBM-LN-")) return "Inventaris Lainnya";
+
+  const nama = String(namaBarang || "").toLowerCase();
+  if (/\b(ac|amplifier|mic|microphone|speaker|tv|monitor|kulkas|cctv|proyektor|sound|inverter)\b/.test(nama)) {
+    return "Elektronik";
+  }
+  if (/\b(karpet|sajadah|permadani|mimbar|podium|alquran|al-qur'an|mukena|sarung)\b/.test(nama)) {
+    return "Perlengkapan Ibadah";
+  }
+  if (/\b(lemari|meja|kursi|rak|papan)\b/.test(nama)) {
+    return "Furnitur & Mebel";
+  }
+  if (/\b(sapu|pel|vacum|vacuum|potong rumput|tangga|selang|kebersihan)\b/.test(nama)) {
+    return "Kebersihan & Operasional";
+  }
+  return "Inventaris Lainnya";
+}
+
 async function postImarohAction(payload: Record<string, unknown>) {
   const res = await fetch("/api/imaroh", {
     method: "POST",
@@ -78,6 +102,7 @@ export default function AdminInventaris() {
 
   // State Modal Edit
   const [editingItem, setEditingItem] = useState<InventarisItem | null>(null);
+  const [editJenisBarang, setEditJenisBarang] = useState<string>("Elektronik");
 
   const selectedJenisObj = useMemo(
     () =>
@@ -85,6 +110,18 @@ export default function AdminInventaris() {
       JENIS_BARANG_OPTIONS[0],
     [jenisBarang]
   );
+
+  const selectedEditJenisObj = useMemo(
+    () =>
+      JENIS_BARANG_OPTIONS.find((opt) => opt.label === editJenisBarang) ||
+      JENIS_BARANG_OPTIONS[0],
+    [editJenisBarang]
+  );
+
+  const openEditModal = (item: InventarisItem) => {
+    setEditingItem(item);
+    setEditJenisBarang(detectJenisFromIdOrName(item.id_barang, item.nama_barang));
+  };
 
   const loadDataInventaris = async () => {
     try {
@@ -235,18 +272,26 @@ export default function AdminInventaris() {
     e.preventDefault();
     if (!editingItem) return;
 
+    const currentId = String(editingItem.id_barang || "").trim();
+    const shouldRegenerateId = !currentId.startsWith(selectedEditJenisObj.prefix);
+
     setSavingEdit(true);
     try {
       const res = await postImarohAction({
         action: "editInventaris",
         id_barang: editingItem.id_barang,
+        jenis_barang: editJenisBarang,
+        regenerasi_id: shouldRegenerateId,
         nama_barang: editingItem.nama_barang,
         jumlah: Number(editingItem.jumlah),
         kondisi: editingItem.kondisi,
         lokasi: String(editingItem.lokasi || "").trim() || "Ruang Utama Masjid",
       });
 
-      alert(res.message || "Barang inventaris berhasil diperbarui.");
+      alert(
+        res.message ||
+          `Barang inventaris berhasil diperbarui${res.id ? ` (ID: ${res.id})` : ""}.`
+      );
       setEditingItem(null);
       await loadDataInventaris();
     } catch (error) {
@@ -581,7 +626,7 @@ export default function AdminInventaris() {
                       <td className="p-3 text-center space-x-2 whitespace-nowrap">
                         <button
                           type="button"
-                          onClick={() => setEditingItem(item)}
+                          onClick={() => openEditModal(item)}
                           className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition"
                         >
                           Edit
@@ -619,6 +664,31 @@ export default function AdminInventaris() {
             <p className="text-xs text-slate-500 mb-4 font-mono">ID: {editingItem.id_barang}</p>
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Jenis Barang
+                </label>
+                <select
+                  value={editJenisBarang}
+                  onChange={(e) => setEditJenisBarang(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                >
+                  {JENIS_BARANG_OPTIONS.map((opt) => (
+                    <option key={opt.label} value={opt.label}>
+                      {opt.label} ({opt.prefix.slice(0, -1)})
+                    </option>
+                  ))}
+                </select>
+                {!String(editingItem.id_barang || "")
+                  .trim()
+                  .startsWith(selectedEditJenisObj.prefix) && (
+                  <p className="mt-1 text-[11px] text-amber-700">
+                    Jenis berbeda dari ID saat ini — ID akan otomatis diperbarui ke prefix{" "}
+                    <span className="font-mono font-semibold">{selectedEditJenisObj.prefix}</span>.
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
                   Nama Barang
