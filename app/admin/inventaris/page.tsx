@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 
@@ -12,6 +12,20 @@ interface InventarisItem {
   lokasi?: string;
   [key: string]: any;
 }
+
+type JenisBarangOption = {
+  label: string;
+  prefix: "MBM-EL-" | "MBM-IB-" | "MBM-FN-" | "MBM-OP-" | "MBM-LN-";
+  contoh: string;
+};
+
+const JENIS_BARANG_OPTIONS: JenisBarangOption[] = [
+  { label: "Elektronik", prefix: "MBM-EL-", contoh: "MBM-EL-001" },
+  { label: "Perlengkapan Ibadah", prefix: "MBM-IB-", contoh: "MBM-IB-001" },
+  { label: "Furnitur & Mebel", prefix: "MBM-FN-", contoh: "MBM-FN-001" },
+  { label: "Kebersihan & Operasional", prefix: "MBM-OP-", contoh: "MBM-OP-001" },
+  { label: "Inventaris Lainnya", prefix: "MBM-LN-", contoh: "MBM-LN-001" },
+];
 
 async function postImarohAction(payload: Record<string, unknown>) {
   const res = await fetch("/api/imaroh", {
@@ -41,13 +55,27 @@ export default function AdminInventaris() {
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Form input tambah barang baru
+  const [jenisBarang, setJenisBarang] = useState<string>("Elektronik");
   const [namaBarang, setNamaBarang] = useState("");
   const [jumlah, setJumlah] = useState("");
   const [kondisi, setKondisi] = useState("Baik");
   const [lokasi, setLokasi] = useState("Ruang Utama Masjid");
 
+  // Filter daftar inventaris (ID Barang, Kondisi, Lokasi)
+  const [filterId, setFilterId] = useState("");
+  const [filterPrefix, setFilterPrefix] = useState("ALL");
+  const [filterKondisi, setFilterKondisi] = useState("ALL");
+  const [filterLokasi, setFilterLokasi] = useState("ALL");
+
   // State Modal Edit
   const [editingItem, setEditingItem] = useState<InventarisItem | null>(null);
+
+  const selectedJenisObj = useMemo(
+    () =>
+      JENIS_BARANG_OPTIONS.find((opt) => opt.label === jenisBarang) ||
+      JENIS_BARANG_OPTIONS[0],
+    [jenisBarang]
+  );
 
   const loadDataInventaris = async () => {
     try {
@@ -66,6 +94,70 @@ export default function AdminInventaris() {
   useEffect(() => {
     loadDataInventaris();
   }, []);
+
+  // Daftar opsi lokasi unik dari data yang ada
+  const lokasiOptions = useMemo(() => {
+    const setLok = new Set<string>();
+    inventarisList.forEach((item) => {
+      const lok = String(item.lokasi || "").trim();
+      if (lok) setLok.add(lok);
+    });
+    return Array.from(setLok).sort((a, b) => a.localeCompare(b, "id"));
+  }, [inventarisList]);
+
+  // Daftar opsi kondisi unik (gabungan bawaan + data yang ada)
+  const kondisiOptions = useMemo(() => {
+    const base = ["Baik", "Kurang Baik", "Perbaikan", "Rusak"];
+    const setKon = new Set<string>(base);
+    inventarisList.forEach((item) => {
+      const kon = String(item.kondisi || "").trim();
+      if (kon) setKon.add(kon);
+    });
+    return Array.from(setKon);
+  }, [inventarisList]);
+
+  // Hasil penyaringan daftar inventaris
+  const filteredInventaris = useMemo(() => {
+    const qId = filterId.trim().toLowerCase();
+    return inventarisList.filter((item) => {
+      const idVal = String(item.id_barang || "").trim();
+      const idLower = idVal.toLowerCase();
+      const namaLower = String(item.nama_barang || "").toLowerCase();
+      const konVal = String(item.kondisi || "").trim();
+      const lokVal = String(item.lokasi || "").trim();
+
+      if (filterPrefix !== "ALL" && !idVal.startsWith(filterPrefix)) {
+        return false;
+      }
+
+      if (qId && !idLower.includes(qId) && !namaLower.includes(qId)) {
+        return false;
+      }
+
+      if (filterKondisi !== "ALL" && konVal !== filterKondisi) {
+        return false;
+      }
+
+      if (filterLokasi !== "ALL" && lokVal !== filterLokasi) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [inventarisList, filterId, filterPrefix, filterKondisi, filterLokasi]);
+
+  const hasActiveFilter =
+    filterId.trim() !== "" ||
+    filterPrefix !== "ALL" ||
+    filterKondisi !== "ALL" ||
+    filterLokasi !== "ALL";
+
+  const resetFilters = () => {
+    setFilterId("");
+    setFilterPrefix("ALL");
+    setFilterKondisi("ALL");
+    setFilterLokasi("ALL");
+  };
 
   const handleLogout = async () => {
     try {
@@ -89,13 +181,17 @@ export default function AdminInventaris() {
     try {
       const res = await postImarohAction({
         action: "tambahInventaris",
+        jenis_barang: jenisBarang,
         nama_barang: namaBarang,
         jumlah: Number(jumlah),
         kondisi: kondisi,
         lokasi: lokasi,
       });
 
-      alert(res.message || "Barang inventaris berhasil ditambahkan ke Google Sheets.");
+      alert(
+        res.message ||
+          `Barang inventaris berhasil ditambahkan${res.id ? ` (ID: ${res.id})` : ""}.`
+      );
       setNamaBarang("");
       setJumlah("");
       await loadDataInventaris();
@@ -188,6 +284,29 @@ export default function AdminInventaris() {
             <form onSubmit={handleTambah} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Jenis Barang
+                </label>
+                <select
+                  value={jenisBarang}
+                  onChange={(e) => setJenisBarang(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                >
+                  {JENIS_BARANG_OPTIONS.map((opt) => (
+                    <option key={opt.label} value={opt.label}>
+                      {opt.label} ({opt.prefix.slice(0, -1)})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Format ID otomatis:{" "}
+                  <span className="font-mono font-semibold text-emerald-700">
+                    {selectedJenisObj.contoh}
+                  </span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Nama Barang
                 </label>
                 <input
@@ -205,6 +324,7 @@ export default function AdminInventaris() {
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Jumlah</label>
                   <input
                     type="number"
+                    min={0}
                     value={jumlah}
                     onChange={(e) => setJumlah(e.target.value)}
                     placeholder="1"
@@ -221,6 +341,7 @@ export default function AdminInventaris() {
                   >
                     <option value="Baik">Baik</option>
                     <option value="Kurang Baik">Kurang Baik</option>
+                    <option value="Perbaikan">Perbaikan</option>
                     <option value="Rusak">Rusak</option>
                   </select>
                 </div>
@@ -278,9 +399,95 @@ export default function AdminInventaris() {
           </div>
         </div>
 
-        {/* Tabel Inventaris */}
+        {/* Tabel Inventaris + Filter */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <h2 className="font-bold text-lg text-[#0b1c30]">Daftar Inventaris Masjid</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="font-bold text-lg text-[#0b1c30]">Daftar Inventaris Masjid</h2>
+              <p className="text-xs text-slate-500">
+                Menampilkan {filteredInventaris.length} dari {inventarisList.length} barang
+              </p>
+            </div>
+            {hasActiveFilter && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="self-start sm:self-auto px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+              >
+                ✕ Reset Filter
+              </button>
+            )}
+          </div>
+
+          {/* Bar Filter: ID Barang, Kondisi, Lokasi */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Cari ID / Nama Barang
+              </label>
+              <input
+                type="text"
+                value={filterId}
+                onChange={(e) => setFilterId(e.target.value)}
+                placeholder="Contoh: MBM-EL-001 atau AC"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Kategori ID Barang
+              </label>
+              <select
+                value={filterPrefix}
+                onChange={(e) => setFilterPrefix(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              >
+                <option value="ALL">Semua ID Barang</option>
+                {JENIS_BARANG_OPTIONS.map((opt) => (
+                  <option key={opt.prefix} value={opt.prefix}>
+                    {opt.prefix.slice(0, -1)} — {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Filter Kondisi
+              </label>
+              <select
+                value={filterKondisi}
+                onChange={(e) => setFilterKondisi(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              >
+                <option value="ALL">Semua Kondisi</option>
+                {kondisiOptions.map((kon) => (
+                  <option key={kon} value={kon}>
+                    {kon}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Filter Lokasi
+              </label>
+              <select
+                value={filterLokasi}
+                onChange={(e) => setFilterLokasi(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              >
+                <option value="ALL">Semua Lokasi</option>
+                {lokasiOptions.map((lok) => (
+                  <option key={lok} value={lok}>
+                    {lok}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
@@ -295,17 +502,17 @@ export default function AdminInventaris() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {inventarisList.length > 0 ? (
-                  inventarisList.map((item, idx) => (
+                {filteredInventaris.length > 0 ? (
+                  filteredInventaris.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
-                      <td className="p-3 font-mono font-semibold text-emerald-700">
+                      <td className="p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
                         {item.id_barang || "-"}
                       </td>
                       <td className="p-3 font-medium text-slate-900">{item.nama_barang || "-"}</td>
                       <td className="p-3 text-center font-bold text-slate-800">
                         {item.jumlah || 1}
                       </td>
-                      <td className="p-3">
+                      <td className="p-3 whitespace-nowrap">
                         <span
                           className={`px-2.5 py-1 rounded-full font-semibold text-[10px] ${
                             item.kondisi === "Baik"
@@ -338,7 +545,9 @@ export default function AdminInventaris() {
                 ) : (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-slate-400">
-                      Belum ada data inventaris yang tercatat.
+                      {inventarisList.length === 0
+                        ? "Belum ada data inventaris yang tercatat."
+                        : "Tidak ada barang inventaris yang cocok dengan filter yang dipilih."}
                     </td>
                   </tr>
                 )}
@@ -374,6 +583,7 @@ export default function AdminInventaris() {
                   <label className="block text-xs font-medium text-slate-700 mb-1">Jumlah</label>
                   <input
                     type="number"
+                    min={0}
                     value={editingItem.jumlah || 1}
                     onChange={(e) =>
                       setEditingItem({ ...editingItem, jumlah: Number(e.target.value) })
@@ -391,6 +601,7 @@ export default function AdminInventaris() {
                   >
                     <option value="Baik">Baik</option>
                     <option value="Kurang Baik">Kurang Baik</option>
+                    <option value="Perbaikan">Perbaikan</option>
                     <option value="Rusak">Rusak</option>
                   </select>
                 </div>
