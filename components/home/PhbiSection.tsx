@@ -1,5 +1,4 @@
-import Image from 'next/image';
-import Link from 'next/link';
+import Link from "next/link";
 
 export default function PhbiSection() {
   return (
@@ -27,19 +26,14 @@ export default function PhbiSection() {
 
         {/* Konten Utama: Poster Vertikal Utuh + Kartu Informasi */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Kolom Poster phbi_isra.jpg (9:16 Utuh Tanpa Crop) */}
+          {/* Kolom Poster phbi_isra.jpg (Utuh Tanpa Crop) */}
           <div className="lg:col-span-5 flex justify-center">
             <div className="w-full max-w-[360px] rounded-3xl overflow-hidden border border-slate-200 bg-[#0d2f45] shadow-md">
-              <div className="relative w-full aspect-[9/16]">
-                <Image
-                  src="/images/phbi_isra.jpg"
-                  alt="Poster Peringatan Isra Mi'raj 27 Rajab 1448 Hijriah Masjid Baitul Mu'minin Citra Mandiri Regency"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 360px"
-                  className="object-contain"
-                  priority
-                />
-              </div>
+              <img
+                src="/phbi_isra.jpg"
+                alt="Poster Peringatan Isra Mi'raj 27 Rajab 1448 Hijriah Masjid Baitul Mu'minin Citra Mandiri Regency"
+                className="w-full h-auto block object-contain"
+              />
             </div>
           </div>
 
@@ -96,10 +90,10 @@ export default function PhbiSection() {
                   Transparansi Dana &amp; Pembiayaan PHBI
                 </p>
                 <p className="text-xs sm:text-sm text-emerald-900/90 leading-relaxed">
-                  Seluruh pemasukan dan pembiayaan acara dicatat pada mutasi kas dengan label{' '}
+                  Seluruh pemasukan dan pembiayaan acara dicatat pada mutasi kas dengan label{" "}
                   <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs border border-emerald-200 text-emerald-950">
                     [PHBI - Isra Mi&apos;raj]
-                  </code>{' '}
+                  </code>{" "}
                   agar saldo kas operasional utama tetap bersih dan mudah ditelusuri.
                 </p>
               </div>
