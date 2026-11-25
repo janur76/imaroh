@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 
 interface InfoUtamaItem {
@@ -121,7 +122,7 @@ const SYIAR_DATABASE: Record<string, SyiarDetailData> = {
   },
 };
 
-export default async function SyiarDetailPage({
+async function SyiarDetailContent({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -300,5 +301,25 @@ export default async function SyiarDetailPage({
         <p>© 2026 Masjid Baitul Mu&apos;minin • Powered by Imaroh SaaS (Kalibu ID)</p>
       </footer>
     </main>
+  );
+}
+
+export default function SyiarDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#f8f9ff] flex items-center justify-center px-4">
+          <p className="text-xs font-semibold text-slate-500">
+            Memuat informasi syiar masjid...
+          </p>
+        </main>
+      }
+    >
+      <SyiarDetailContent params={params} />
+    </Suspense>
   );
 }
