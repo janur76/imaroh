@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
+import SyiarMasjidSection from "@/components/SyiarMasjidSection";
 
 function resolveHeaderDanAlamat(rawNama?: string, rawAlamat?: string) {
   const cleanNama = String(rawNama || "Masjid Baitul Mu'minin").trim();
@@ -352,6 +353,11 @@ export default function PublicPortal() {
             </div>
           </div>
         </div>
+
+        {/* Section Syiar & Informasi Masjid */}
+        <SyiarMasjidSection
+          namaMasjid={profil.nama_masjid || "Masjid Baitul Mu'minin"}
+        />
       </div>
 
       {/* Footer Publik */}
