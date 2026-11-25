@@ -32,9 +32,28 @@ const DEFAULT_LOKASI_SARAN = [
   "Ruang Shalat Utama",
   "Ruang Sound System",
   "Ruang Operator Masjid",
+  "Ruang Imam",
+  "Teras Depan",
   "Gudang",
   "Kantor Takmir",
 ];
+
+function getKondisiBadgeClass(kondisi?: string): string {
+  const val = String(kondisi || "Baik").trim().toLowerCase();
+  if (val === "baik") {
+    return "bg-emerald-100 text-emerald-700 border border-emerald-200";
+  }
+  if (val === "kurang baik") {
+    return "bg-blue-100 text-blue-700 border border-blue-200";
+  }
+  if (val === "perbaikan") {
+    return "bg-orange-100 text-orange-700 border border-orange-200";
+  }
+  if (val === "rusak") {
+    return "bg-rose-100 text-rose-700 border border-rose-200";
+  }
+  return "bg-slate-100 text-slate-700 border border-slate-200";
+}
 
 function detectJenisFromIdOrName(idBarang?: string, namaBarang?: string): string {
   const id = String(idBarang || "").trim().toUpperCase();
@@ -45,7 +64,11 @@ function detectJenisFromIdOrName(idBarang?: string, namaBarang?: string): string
   if (id.startsWith("MBM-LN-")) return "Inventaris Lainnya";
 
   const nama = String(namaBarang || "").toLowerCase();
-  if (/\b(ac|amplifier|mic|microphone|speaker|tv|monitor|kulkas|cctv|proyektor|sound|inverter)\b/.test(nama)) {
+  if (
+    /\b(ac|amplifier|mic|microphone|headset|speaker|tv|monitor|kulkas|cctv|proyektor|sound|inverter|kipas|dispenser)\b/.test(
+      nama
+    )
+  ) {
     return "Elektronik";
   }
   if (/\b(karpet|sajadah|permadani|mimbar|podium|alquran|al-qur'an|mukena|sarung)\b/.test(nama)) {
@@ -199,7 +222,7 @@ export default function AdminInventaris() {
         return false;
       }
 
-      if (filterKondisi !== "ALL" && konVal !== filterKondisi) {
+      if (filterKondisi !== "ALL" && konVal.toLowerCase() !== filterKondisi.toLowerCase()) {
         return false;
       }
 
@@ -613,11 +636,9 @@ export default function AdminInventaris() {
                       </td>
                       <td className="p-3 whitespace-nowrap">
                         <span
-                          className={`px-2.5 py-1 rounded-full font-semibold text-[10px] ${
-                            item.kondisi === "Baik"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-amber-100 text-amber-800"
-                          }`}
+                          className={`px-2.5 py-1 rounded-full font-semibold text-[11px] ${getKondisiBadgeClass(
+                            item.kondisi
+                          )}`}
                         >
                           {item.kondisi || "Baik"}
                         </span>
