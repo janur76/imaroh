@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 import SyiarMasjidSection from "@/components/SyiarMasjidSection";
+import PhbiSection from "@/components/home/PhbiSection";
+
+type FilterMutasi = "semua" | "masuk" | "keluar" | "qris" | "phbi";
 
 function resolveHeaderDanAlamat(rawNama?: string, rawAlamat?: string) {
   const cleanNama = String(rawNama || "Masjid Baitul Mu'minin").trim();
@@ -46,6 +49,7 @@ export default function PublicPortal() {
   const [inventarisList, setInventarisList] = useState<any[]>([]);
   const [kajianList, setKajianList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterMutasi, setFilterMutasi] = useState<FilterMutasi>("semua");
 
   const loadPublicData = async () => {
     try {
@@ -85,6 +89,17 @@ export default function PublicPortal() {
     if (jns.includes("keluar")) totalKeluar += nom;
   });
   const saldoBersih = totalMasuk - totalKeluar;
+
+  const filteredKasList = kasList.filter((item) => {
+    const jns = String(item.jenis || "").toLowerCase();
+    const ket = String(item.keterangan || "").toLowerCase();
+
+    if (filterMutasi === "masuk") return jns.includes("masuk");
+    if (filterMutasi === "keluar") return jns.includes("keluar");
+    if (filterMutasi === "qris") return ket.includes("[qris]") || ket.includes("qris");
+    if (filterMutasi === "phbi") return ket.includes("[phbi") || ket.includes("phbi");
+    return true;
+  });
 
   const {
     nama: namaMasjidHeader,
@@ -190,7 +205,7 @@ export default function PublicPortal() {
                 Transparansi Keuangan Umat
               </span>
               <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-                Akuntabilitas & Keterbukaan Kas Masjid
+                Akuntabilitas &amp; Keterbukaan Kas Masjid
               </h2>
               <p className="text-sm text-emerald-100/90 max-w-xl">
                 Seluruh catatan infak, donasi jamaah, dan alokasi belanja operasional dikelola secara
@@ -213,19 +228,48 @@ export default function PublicPortal() {
           </div>
         </div>
 
-        {/* Tabel Mutasi Kas Publik */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
-            <div className="flex justify-between items-center">
+        {/* Tabel Mutasi Kas Publik & Sidebar */}
+        <div id="mutasi" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
               <div>
                 <h3 className="font-extrabold text-lg text-[#0b1c30]">Mutasi Kas Terbaru</h3>
                 <p className="text-xs text-slate-500">
                   Daftar transaksi kas masuk dan keluar masjid.
                 </p>
               </div>
-              <span className="text-xs font-semibold text-[#047857] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-                {kasList.length} Transaksi Tercatat
+              <span className="self-start sm:self-auto text-xs font-semibold text-[#047857] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                {filteredKasList.length} Transaksi Ditampilkan
               </span>
+            </div>
+
+            {/* Filter Cepat Mutasi */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  { id: "semua", label: "Semua" },
+                  { id: "masuk", label: "Kas Masuk" },
+                  { id: "keluar", label: "Kas Keluar" },
+                  { id: "qris", label: "[QRIS]" },
+                  { id: "phbi", label: "[PHBI]" },
+                ] as { id: FilterMutasi; label: string }[]
+              ).map((tab) => {
+                const active = filterMutasi === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setFilterMutasi(tab.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition border ${
+                      active
+                        ? "bg-[#047857] text-white border-[#047857] shadow-sm"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="overflow-x-auto">
@@ -246,9 +290,9 @@ export default function PublicPortal() {
                         Memuat data mutasi kas...
                       </td>
                     </tr>
-                  ) : kasList.length > 0 ? (
-                    kasList.slice(0, 20).map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition">
+                  ) : filteredKasList.length > 0 ? (
+                    filteredKasList.slice(0, 20).map((item, idx) => (
+                      <tr key={item.id_transaksi || item.id || idx} className="hover:bg-slate-50 transition">
                         <td className="p-3 whitespace-nowrap font-mono font-semibold text-emerald-700">
                           {item.id_transaksi || item.id || "-"}
                         </td>
@@ -277,7 +321,7 @@ export default function PublicPortal() {
                   ) : (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-slate-400">
-                        Belum ada data kas yang tercatat di database.
+                        Belum ada data kas yang sesuai dengan filter ini.
                       </td>
                     </tr>
                   )}
@@ -288,10 +332,10 @@ export default function PublicPortal() {
 
           {/* Sidebar Samping (QRIS & Kajian) */}
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 text-center space-y-3">
+            <div id="qris" className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 text-center space-y-3">
               <h3 className="font-extrabold text-sm text-[#0b1c30]">💳 QRIS Donasi / Infak</h3>
 
-              {/* Blok Identitas Merchant QRIS (di bawah judul, di atas petunjuk scan) */}
+              {/* Blok Identitas Merchant QRIS */}
               <div className="rounded-2xl bg-slate-50/90 border border-slate-200/80 px-3.5 py-3 text-center space-y-1">
                 <p className="font-serif text-sm sm:text-base font-bold tracking-wide text-slate-900 uppercase">
                   MASJID BAITUL MUMININ
@@ -319,11 +363,18 @@ export default function PublicPortal() {
                   </div>
                 )}
               </div>
+
+              {/* Catatan Singkat Transparansi Rekap QRIS */}
+              <p className="text-[11px] leading-relaxed text-slate-500 bg-emerald-50/70 border border-emerald-100 rounded-xl p-2.5 text-left">
+                Pencatatan infak QRIS dilakukan berkala sesuai mutasi/rekap yang terverifikasi takmir
+                dengan label <span className="font-mono font-semibold text-emerald-800">[QRIS]</span>,
+                tanggal/periode rekap, dan nominal di tabel mutasi kas.
+              </p>
             </div>
 
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
               <h3 className="font-extrabold text-base text-[#0b1c30] flex items-center gap-2">
-                <span>📅</span> Agenda & Jadwal Kajian
+                <span>📅</span> Agenda &amp; Jadwal Kajian
               </h3>
               <div className="space-y-3">
                 {loading ? (
@@ -353,6 +404,9 @@ export default function PublicPortal() {
             </div>
           </div>
         </div>
+
+        {/* Section PHBI Terdekat (Isra Mi'raj 1448 H) */}
+        <PhbiSection />
 
         {/* Section Syiar & Informasi Masjid */}
         <SyiarMasjidSection
