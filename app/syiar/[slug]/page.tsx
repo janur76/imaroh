@@ -3,6 +3,24 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
+interface InfoUtamaItem {
+  label: string;
+  nilai: string;
+}
+
+interface PaketQurbanItem {
+  kode: string;
+  judul: string;
+  nominal: string;
+  keterangan: string;
+}
+
+interface KontakWaItem {
+  nama: string;
+  nomorTampil: string;
+  waLink: string;
+}
+
 interface SyiarDetailData {
   slug: string;
   badge: string;
@@ -14,21 +32,9 @@ interface SyiarDetailData {
     sumber: string;
   };
   deskripsi: string;
-  infoUtama: {
-    label: string;
-    nilai: string;
-  }[];
-  paketList?: {
-    kode: string;
-    judul: string;
-    nominal: string;
-    keterangan: string;
-  }[];
-  kontakWa: {
-    nama: string;
-    nomorTampil: string;
-    waLink: string;
-  }[];
+  infoUtama: InfoUtamaItem[];
+  paketList: PaketQurbanItem[];
+  kontakWa: KontakWaItem[];
 }
 
 const SYIAR_DATABASE: Record<string, SyiarDetailData> = {
@@ -51,6 +57,7 @@ const SYIAR_DATABASE: Record<string, SyiarDetailData> = {
       { label: "Pukul", nilai: "04.30 WIB – Syuruq" },
       { label: "Lokasi", nilai: "Masjid Baitul Mu'minin, Citra Mandiri Regency" },
     ],
+    paketList: [],
     kontakWa: [
       {
         nama: "Takmir / Informasi Kajian",
@@ -118,9 +125,10 @@ const SYIAR_DATABASE: Record<string, SyiarDetailData> = {
 };
 
 export default function SyiarDetailPage() {
-  const params = useParams<{ slug: string }>();
-  const slug = Array.isArray(params?.slug) ? params.slug[0] : params?.slug || "";
-  const data = SYIAR_DATABASE[slug];
+  const params = useParams();
+  const rawSlug = params?.slug;
+  const slug = typeof rawSlug === "string" ? rawSlug : Array.isArray(rawSlug) ? rawSlug[0] : "";
+  const data = slug ? SYIAR_DATABASE[slug] : undefined;
 
   if (!data) {
     return (
@@ -148,7 +156,6 @@ export default function SyiarDetailPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f0fdf4] via-[#f8f9ff] to-[#f0fdf4] text-[#0b1c30]">
-      {/* Top Bar Navigasi Kembali */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 px-4 md:px-8 py-3.5 shadow-xs">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <Link
@@ -164,10 +171,8 @@ export default function SyiarDetailPage() {
         </div>
       </header>
 
-      {/* Konten Detail */}
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Kolom Kiri: Poster Penuh */}
           <div className="lg:col-span-5 bg-white rounded-3xl p-3 sm:p-4 border border-slate-200 shadow-sm">
             <div className="rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/70">
               <img
@@ -181,7 +186,6 @@ export default function SyiarDetailPage() {
             </p>
           </div>
 
-          {/* Kolom Kanan: Rincian Lengkap & Tombol WA */}
           <div className="lg:col-span-7 space-y-6">
             <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm space-y-5">
               <div>
@@ -196,7 +200,6 @@ export default function SyiarDetailPage() {
                 </p>
               </div>
 
-              {/* Kutipan Hadits / Ayat */}
               <blockquote className="rounded-2xl bg-emerald-50/70 border border-emerald-200/70 p-4 space-y-1">
                 <p className="text-xs md:text-sm italic font-medium text-[#064e3b] leading-relaxed">
                   {data.dalil.teks}
@@ -210,7 +213,6 @@ export default function SyiarDetailPage() {
                 {data.deskripsi}
               </p>
 
-              {/* Tabel Ringkasan Informasi */}
               <div className="rounded-2xl border border-slate-200 overflow-hidden">
                 <dl className="divide-y divide-slate-100 text-xs md:text-sm">
                   {data.infoUtama.map((row, idx) => (
@@ -226,8 +228,7 @@ export default function SyiarDetailPage() {
               </div>
             </div>
 
-            {/* Rincian Paket Qurban (Khusus Halaman Tabungan Qurban) */}
-            {data.paketList && data.paketList.length > 0 && (
+            {data.paketList.length > 0 && (
               <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm space-y-4">
                 <h2 className="text-lg font-extrabold text-[#0b1c30]">
                   Pilihan Paket Tabungan Qurban
@@ -258,7 +259,6 @@ export default function SyiarDetailPage() {
               </div>
             )}
 
-            {/* Kontak & Pendaftaran WhatsApp */}
             <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm space-y-4">
               <div>
                 <h2 className="text-base md:text-lg font-extrabold text-[#0b1c30]">
@@ -297,7 +297,6 @@ export default function SyiarDetailPage() {
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="mt-12 border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
         <p>© 2026 Masjid Baitul Mu&apos;minin • Powered by Imaroh SaaS (Kalibu ID)</p>
       </footer>
