@@ -1,7 +1,4 @@
-"use client";
-
 import Link from "next/link";
-import { useParams } from "next/navigation";
 
 interface InfoUtamaItem {
   label: string;
@@ -124,11 +121,13 @@ const SYIAR_DATABASE: Record<string, SyiarDetailData> = {
   },
 };
 
-export default function SyiarDetailPage() {
-  const params = useParams();
-  const rawSlug = params?.slug;
-  const slug = typeof rawSlug === "string" ? rawSlug : Array.isArray(rawSlug) ? rawSlug[0] : "";
-  const data = slug ? SYIAR_DATABASE[slug] : undefined;
+export default async function SyiarDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const data = SYIAR_DATABASE[slug];
 
   if (!data) {
     return (
