@@ -44,7 +44,12 @@ function extractDriveFileId(rawUrl: string): string | null {
   if (dPathMatch?.[1] && trimmed.includes("drive.google.com")) return dPathMatch[1];
 
   const idParamMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (idParamMatch?.[1] && trimmed.includes("drive.google.com")) return idParamMatch[1];
+  if (idParamMatch?.[1] && (trimmed.includes("drive.google.com") || trimmed.includes("googleusercontent.com"))) {
+    return idParamMatch[1];
+  }
+
+  const lhMatch = trimmed.match(/lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+  if (lhMatch?.[1]) return lhMatch[1];
 
   return null;
 }
@@ -55,7 +60,7 @@ function normalizeDriveImageUrl(rawUrl: string): string {
 
   const fileId = extractDriveFileId(trimmed);
   if (fileId) {
-    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
   }
 
   return trimmed;
