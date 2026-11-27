@@ -14,10 +14,10 @@ type BeritaItem = {
   tanggal_update: string;
 };
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabase =
+  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 function statusBadgeStyle(status: string) {
   const s = String(status || "").toLowerCase();
@@ -32,15 +32,21 @@ function statusBadgeStyle(status: string) {
 
 export default function BaitulMumininNewsSection() {
   const [items, setItems] = useState<BeritaItem[]>([]);
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
 
     async function loadNews() {
+      if (!supabase) {
+        if (active) setLoading(false);
+        return;
+      }
+
       try {
         const { data, error } = await supabase
-          .from("berita_kegiatan")
+          .from("imaroh_berita_kegiatan")
           .select("id, judul, status, ringkasan, foto_url, petugas, tampil_publik, tanggal_update")
           .eq("tampil_publik", true)
           .order("tanggal_update", { ascending: false })
@@ -97,54 +103,61 @@ export default function BaitulMumininNewsSection() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {items.map((item) => (
-            <article
-              key={item.id}
-              className="rounded-3xl bg-white border border-slate-200/80 shadow-sm overflow-hidden flex flex-col justify-between"
-            >
-              <div>
-                {item.foto_url && (
-                  <div className="w-full h-44 bg-slate-100 overflow-hidden border-b border-slate-100">
-                    <img
-                      src={item.foto_url}
-                      alt={item.judul}
-                      className="w-full h-full object-cover"
-                    />
+          {items.map((item) => {
+            const showImage = Boolean(item.foto_url) && !brokenImages[item.id];
+
+            return (
+              <article
+                key={item.id}
+                className="rounded-3xl bg-white border border-slate-200/80 shadow-sm overflow-hidden flex flex-col justify-between"
+              >
+                <div>
+                  {showImage && item.foto_url && (
+                    <div className="w-full h-44 bg-slate-100 overflow-hidden border-b border-slate-100">
+                      <img
+                        src={item.foto_url}
+                        alt={item.judul}
+                        className="w-full h-full object-cover"
+                        onError={() =>
+                          setBrokenImages((prev) => ({ ...prev, [item.id]: true }))
+                        }
+                      />
+                    </div>
+                  )}
+
+                  <div className="p-5 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${statusBadgeStyle(
+                          item.status
+                        )}`}
+                      >
+                        {item.status || "Sedang Berjalan"}
+                      </span>
+                      <span className="text-[11px] text-slate-400 font-medium">
+                        {item.tanggal_update}
+                      </span>
+                    </div>
+
+                    <h3 className="text-base font-extrabold text-slate-900 leading-snug">
+                      {item.judul}
+                    </h3>
+
+                    <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+                      {item.ringkasan}
+                    </p>
                   </div>
-                )}
-
-                <div className="p-5 space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${statusBadgeStyle(
-                        item.status
-                      )}`}
-                    >
-                      {item.status || "Sedang Berjalan"}
-                    </span>
-                    <span className="text-[11px] text-slate-400 font-medium">
-                      {item.tanggal_update}
-                    </span>
-                  </div>
-
-                  <h3 className="text-base font-extrabold text-slate-900 leading-snug">
-                    {item.judul}
-                  </h3>
-
-                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
-                    {item.ringkasan}
-                  </p>
                 </div>
-              </div>
 
-              <div className="px-5 py-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                <span>
-                  Petugas: <strong className="text-slate-700">{item.petugas || "Takmir"}</strong>
-                </span>
-                <span className="text-emerald-700 font-semibold">Baitul Mu&apos;minin News</span>
-              </div>
-            </article>
-          ))}
+                <div className="px-5 py-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>
+                    Petugas: <strong className="text-slate-700">{item.petugas || "Takmir"}</strong>
+                  </span>
+                  <span className="text-emerald-700 font-semibold">Baitul Mu&apos;minin News</span>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
