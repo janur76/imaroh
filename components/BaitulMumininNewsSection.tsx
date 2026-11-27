@@ -35,29 +35,41 @@ function extractDriveFileId(rawUrl: string): string | null {
   if (dPathMatch?.[1] && trimmed.includes("drive.google.com")) return dPathMatch[1];
 
   const idParamMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (idParamMatch?.[1] && trimmed.includes("drive.google.com")) return idParamMatch[1];
+  if (
+    idParamMatch?.[1] &&
+    (trimmed.includes("drive.google.com") || trimmed.includes("googleusercontent.com"))
+  ) {
+    return idParamMatch[1];
+  }
+
+  const lhMatch = trimmed.match(/lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+  if (lhMatch?.[1]) return lhMatch[1];
 
   return null;
 }
 
-function normalizeDriveImageUrl(rawUrl: string): string {
+function buildPhotoCandidates(rawUrl: string): string[] {
   const trimmed = rawUrl.trim();
-  if (!trimmed) return "";
+  if (!trimmed) return [];
 
   const fileId = extractDriveFileId(trimmed);
-  if (fileId) {
-    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  if (!fileId) {
+    return [trimmed];
   }
 
-  return trimmed;
+  const primary = `https://lh3.googleusercontent.com/d/${fileId}`;
+  const thumb = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
+  const ucView = `https://drive.google.com/uc?export=view&id=${fileId}`;
+
+  return Array.from(new Set([primary, thumb, ucView, trimmed]));
 }
 
-function parsePhotoUrls(fotoUrl: string | null): string[] {
+function parsePhotoGroups(fotoUrl: string | null): string[][] {
   if (!fotoUrl) return [];
   return fotoUrl
     .split(/[\n,]+/)
-    .map((entry) => normalizeDriveImageUrl(entry))
-    .filter(Boolean);
+    .map((entry) => buildPhotoCandidates(entry))
+    .filter((candidates) => candidates.length > 0);
 }
 
 function statusBadgeStyle(status: string) {
@@ -73,7 +85,7 @@ function statusBadgeStyle(status: string) {
 
 export default function BaitulMumininNewsSection() {
   const [items, setItems] = useState<BeritaItem[]>([]);
-  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
+  const [candidateIndexMap, setCandidateIndexMap] = useState<Record<string, number>>({});
   const [lightbox, setLightbox] = useState<LightboxState>(null);
   const [loading, setLoading] = useState(true);
 
@@ -146,9 +158,23 @@ export default function BaitulMumininNewsSection() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {items.map((item) => {
-            const validPhotos = parsePhotoUrls(item.foto_url).filter(
-              (url, idx) => !brokenImages[`${item.id}-${idx}`]
-            );
+            const groups = parsePhotoGroups(item.foto_url);
+            const activePhotos = groups
+              .map((candidates, idx) => {
+                const key = `${item.id}-${idx}`;
+                const currentIdx = candidateIndexMap[key] ?? 0;
+                if (currentIdx >= candidates.length) return null;
+                return { key, url: candidates[currentIdx], totalCandidates: candidates.length };
+              })
+              .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+            const handleImageError = (key: string, totalCandidates: number) => {
+              setCandidateIndexMap((prev) => {
+                const nextIdx = (prev[key] ?? 0) + 1;
+                if (nextIdx > totalCandidates) return prev;
+                return { ...prev, [key]: nextIdx };
+              });
+            };
 
             return (
               <article
@@ -156,49 +182,46 @@ export default function BaitulMumininNewsSection() {
                 className="rounded-3xl bg-white border border-slate-200/80 shadow-sm overflow-hidden flex flex-col justify-between"
               >
                 <div>
-                  {validPhotos.length === 1 && (
+                  {activePhotos.length === 1 && (
                     <button
                       type="button"
-                      onClick={() => setLightbox({ url: validPhotos[0], judul: item.judul })}
+                      onClick={() => setLightbox({ url: activePhotos[0].url, judul: item.judul })}
                       className="w-full h-44 bg-slate-100 overflow-hidden border-b border-slate-100 block text-left"
                     >
                       <img
-                        src={validPhotos[0]}
+                        src={activePhotos[0].url}
                         alt={item.judul}
                         className="w-full h-full object-cover hover:scale-[1.02] transition"
                         onError={() =>
-                          setBrokenImages((prev) => ({ ...prev, [`${item.id}-0`]: true }))
+                          handleImageError(activePhotos[0].key, activePhotos[0].totalCandidates)
                         }
                       />
                     </button>
                   )}
 
-                  {validPhotos.length > 1 && (
+                  {activePhotos.length > 1 && (
                     <div className="grid grid-cols-2 gap-1 bg-slate-100 border-b border-slate-100 p-1">
-                      {validPhotos.slice(0, 4).map((url, idx) => {
-                        const isFourthWithMore = idx === 3 && validPhotos.length > 4;
+                      {activePhotos.slice(0, 4).map((photo, idx) => {
+                        const isFourthWithMore = idx === 3 && activePhotos.length > 4;
 
                         return (
                           <button
-                            key={`${item.id}-foto-${idx}`}
+                            key={photo.key}
                             type="button"
-                            onClick={() => setLightbox({ url, judul: item.judul })}
+                            onClick={() => setLightbox({ url: photo.url, judul: item.judul })}
                             className="relative h-28 bg-white rounded-xl overflow-hidden block text-left"
                           >
                             <img
-                              src={url}
+                              src={photo.url}
                               alt={`${item.judul} - foto ${idx + 1}`}
                               className="w-full h-full object-cover hover:scale-[1.03] transition"
                               onError={() =>
-                                setBrokenImages((prev) => ({
-                                  ...prev,
-                                  [`${item.id}-${idx}`]: true,
-                                }))
+                                handleImageError(photo.key, photo.totalCandidates)
                               }
                             />
                             {isFourthWithMore && (
                               <span className="absolute inset-0 bg-slate-900/60 text-white text-xs font-extrabold flex items-center justify-center">
-                                +{validPhotos.length - 3} Foto
+                                +{activePhotos.length - 3} Foto
                               </span>
                             )}
                           </button>
