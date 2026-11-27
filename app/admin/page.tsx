@@ -602,6 +602,13 @@ export default function AdminDashboard() {
             </a>
             <button
               type="button"
+              onClick={() => router.push("/admin/kegiatan")}
+              className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#047857] border border-emerald-200 text-xs font-semibold"
+            >
+              📰 Berita Kegiatan
+            </button>
+            <button
+              type="button"
               onClick={() => router.push("/admin/inventaris")}
               className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#047857] border border-emerald-200 text-xs font-semibold"
             >
