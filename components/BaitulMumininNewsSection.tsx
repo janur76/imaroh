@@ -14,10 +14,51 @@ type BeritaItem = {
   tanggal_update: string;
 };
 
+type LightboxState = {
+  url: string;
+  judul: string;
+} | null;
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const supabase =
   supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+
+function extractDriveFileId(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  const filePathMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (filePathMatch?.[1]) return filePathMatch[1];
+
+  const dPathMatch = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (dPathMatch?.[1] && trimmed.includes("drive.google.com")) return dPathMatch[1];
+
+  const idParamMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idParamMatch?.[1] && trimmed.includes("drive.google.com")) return idParamMatch[1];
+
+  return null;
+}
+
+function normalizeDriveImageUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return "";
+
+  const fileId = extractDriveFileId(trimmed);
+  if (fileId) {
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  }
+
+  return trimmed;
+}
+
+function parsePhotoUrls(fotoUrl: string | null): string[] {
+  if (!fotoUrl) return [];
+  return fotoUrl
+    .split(/[\n,]+/)
+    .map((entry) => normalizeDriveImageUrl(entry))
+    .filter(Boolean);
+}
 
 function statusBadgeStyle(status: string) {
   const s = String(status || "").toLowerCase();
@@ -33,6 +74,7 @@ function statusBadgeStyle(status: string) {
 export default function BaitulMumininNewsSection() {
   const [items, setItems] = useState<BeritaItem[]>([]);
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
+  const [lightbox, setLightbox] = useState<LightboxState>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -104,7 +146,9 @@ export default function BaitulMumininNewsSection() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {items.map((item) => {
-            const showImage = Boolean(item.foto_url) && !brokenImages[item.id];
+            const validPhotos = parsePhotoUrls(item.foto_url).filter(
+              (url, idx) => !brokenImages[`${item.id}-${idx}`]
+            );
 
             return (
               <article
@@ -112,16 +156,54 @@ export default function BaitulMumininNewsSection() {
                 className="rounded-3xl bg-white border border-slate-200/80 shadow-sm overflow-hidden flex flex-col justify-between"
               >
                 <div>
-                  {showImage && item.foto_url && (
-                    <div className="w-full h-44 bg-slate-100 overflow-hidden border-b border-slate-100">
+                  {validPhotos.length === 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setLightbox({ url: validPhotos[0], judul: item.judul })}
+                      className="w-full h-44 bg-slate-100 overflow-hidden border-b border-slate-100 block text-left"
+                    >
                       <img
-                        src={item.foto_url}
+                        src={validPhotos[0]}
                         alt={item.judul}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover hover:scale-[1.02] transition"
                         onError={() =>
-                          setBrokenImages((prev) => ({ ...prev, [item.id]: true }))
+                          setBrokenImages((prev) => ({ ...prev, [`${item.id}-0`]: true }))
                         }
                       />
+                    </button>
+                  )}
+
+                  {validPhotos.length > 1 && (
+                    <div className="grid grid-cols-2 gap-1 bg-slate-100 border-b border-slate-100 p-1">
+                      {validPhotos.slice(0, 4).map((url, idx) => {
+                        const isFourthWithMore = idx === 3 && validPhotos.length > 4;
+
+                        return (
+                          <button
+                            key={`${item.id}-foto-${idx}`}
+                            type="button"
+                            onClick={() => setLightbox({ url, judul: item.judul })}
+                            className="relative h-28 bg-white rounded-xl overflow-hidden block text-left"
+                          >
+                            <img
+                              src={url}
+                              alt={`${item.judul} - foto ${idx + 1}`}
+                              className="w-full h-full object-cover hover:scale-[1.03] transition"
+                              onError={() =>
+                                setBrokenImages((prev) => ({
+                                  ...prev,
+                                  [`${item.id}-${idx}`]: true,
+                                }))
+                              }
+                            />
+                            {isFourthWithMore && (
+                              <span className="absolute inset-0 bg-slate-900/60 text-white text-xs font-extrabold flex items-center justify-center">
+                                +{validPhotos.length - 3} Foto
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -158,6 +240,36 @@ export default function BaitulMumininNewsSection() {
               </article>
             );
           })}
+        </div>
+      )}
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-2xl w-full p-5 shadow-2xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-extrabold text-slate-900 truncate">{lightbox.judul}</h3>
+              <button
+                type="button"
+                onClick={() => setLightbox(null)}
+                className="px-3 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+            <div className="rounded-2xl bg-slate-100 overflow-hidden max-h-[70vh] flex items-center justify-center">
+              <img
+                src={lightbox.url}
+                alt={lightbox.judul}
+                className="max-w-full max-h-[70vh] object-contain"
+              />
+            </div>
+          </div>
         </div>
       )}
     </section>
