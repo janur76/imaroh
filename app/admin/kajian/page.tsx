@@ -11,7 +11,62 @@ interface KajianItem {
   tema?: string;
   pemateri?: string;
   tempat?: string;
+  foto_url?: string;
   [key: string]: any;
+}
+
+function extractDriveFileId(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  const filePathMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (filePathMatch?.[1]) return filePathMatch[1];
+
+  const dPathMatch = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (dPathMatch?.[1] && trimmed.includes("drive.google.com")) return dPathMatch[1];
+
+  const idParamMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (
+    idParamMatch?.[1] &&
+    (trimmed.includes("drive.google.com") || trimmed.includes("googleusercontent.com"))
+  ) {
+    return idParamMatch[1];
+  }
+
+  const lhMatch = trimmed.match(/lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+  if (lhMatch?.[1]) return lhMatch[1];
+
+  return null;
+}
+
+function normalizeDriveImageUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return "";
+
+  const fileId = extractDriveFileId(trimmed);
+  if (fileId) {
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
+  }
+
+  return trimmed;
+}
+
+function normalizeMultiFotoInput(rawInput: string): string {
+  const parts = rawInput
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map(normalizeDriveImageUrl);
+
+  return parts.join("\n");
+}
+
+function parsePreviewPhotos(rawInput?: string): string[] {
+  if (!rawInput) return [];
+  return rawInput
+    .split(/[\n,]+/)
+    .map((item) => normalizeDriveImageUrl(item))
+    .filter(Boolean);
 }
 
 async function postImarohAction(payload: Record<string, unknown>) {
@@ -47,6 +102,7 @@ export default function KajianAdminPage() {
   const [tema, setTema] = useState("");
   const [pemateri, setPemateri] = useState("");
   const [tempat, setTempat] = useState("");
+  const [fotoUrl, setFotoUrl] = useState("");
 
   // State Modal Edit Kajian
   const [editingItem, setEditingItem] = useState<KajianItem | null>(null);
@@ -86,6 +142,7 @@ export default function KajianAdminPage() {
 
     setLoading(true);
     try {
+      const formattedFoto = normalizeMultiFotoInput(fotoUrl);
       const res = await postImarohAction({
         action: "tambahKajian",
         tanggal: tanggal,
@@ -93,6 +150,7 @@ export default function KajianAdminPage() {
         tema: tema,
         pemateri: pemateri,
         tempat: tempat || "Masjid Baitul Mu'minin",
+        foto_url: formattedFoto,
       });
 
       alert(res.message || "Jadwal kajian berhasil ditambahkan ke Google Sheets.");
@@ -101,6 +159,7 @@ export default function KajianAdminPage() {
       setTema("");
       setPemateri("");
       setTempat("");
+      setFotoUrl("");
 
       await loadKajian();
     } catch (error) {
@@ -117,6 +176,7 @@ export default function KajianAdminPage() {
 
     setSavingEdit(true);
     try {
+      const formattedFoto = normalizeMultiFotoInput(editingItem.foto_url || "");
       const res = await postImarohAction({
         action: "editKajian",
         id_kajian: editingItem.id_kajian,
@@ -125,6 +185,7 @@ export default function KajianAdminPage() {
         tema: editingItem.tema,
         pemateri: editingItem.pemateri,
         tempat: editingItem.tempat,
+        foto_url: formattedFoto,
       });
 
       alert(res.message || "Jadwal kajian berhasil diperbarui.");
@@ -155,6 +216,9 @@ export default function KajianAdminPage() {
     }
   };
 
+  const addPreviewPhotos = parsePreviewPhotos(fotoUrl);
+  const editPreviewPhotos = parsePreviewPhotos(editingItem?.foto_url);
+
   return (
     <main className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -162,7 +226,7 @@ export default function KajianAdminPage() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <span className="text-xs uppercase font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-              Modul Kajian & Kegiatan
+              Modul Kajian &amp; Kegiatan
             </span>
             <h1 className="text-2xl font-extrabold text-[#0b1c30] mt-2">
               Kelola Jadwal Kajian Masjid
@@ -256,6 +320,45 @@ export default function KajianAdminPage() {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Link Foto Dokumentasi Google Drive (Opsional, Bisa &gt; 1 Foto)
+                </label>
+                <textarea
+                  rows={2}
+                  value={fotoUrl}
+                  onChange={(e) => setFotoUrl(e.target.value)}
+                  onBlur={() => setFotoUrl((prev) => normalizeMultiFotoInput(prev))}
+                  placeholder="Tempel link foto Google Drive (pisah Enter atau koma untuk beberapa foto)"
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Otomatis dikonversi ke format gambar langsung saat keluar kolom / disimpan.
+                </p>
+              </div>
+
+              {addPreviewPhotos.length > 0 && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <p className="text-[11px] font-bold text-slate-600">
+                    Pratinjau Foto Kajian ({addPreviewPhotos.length}):
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {addPreviewPhotos.map((url, idx) => (
+                      <div
+                        key={`${url}-${idx}`}
+                        className="h-20 rounded-lg bg-white border border-slate-200 overflow-hidden"
+                      >
+                        <img
+                          src={url}
+                          alt={`Pratinjau kajian ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={loading}
@@ -303,48 +406,68 @@ export default function KajianAdminPage() {
               <thead className="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200">
                 <tr>
                   <th className="p-3">ID Kajian</th>
-                  <th className="p-3">Tanggal & Waktu</th>
+                  <th className="p-3">Tanggal &amp; Waktu</th>
                   <th className="p-3">Tema Kajian</th>
                   <th className="p-3">Pemateri</th>
                   <th className="p-3">Tempat</th>
+                  <th className="p-3">Foto</th>
                   <th className="p-3 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {kajianList.length > 0 ? (
-                  kajianList.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition">
-                      <td className="p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
-                        {item.id_kajian || "-"}
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-medium text-slate-800">
-                        {item.tanggal ? String(item.tanggal).split("T")[0] : "-"} <br />
-                        <span className="text-[10px] text-slate-500">{item.waktu || "-"}</span>
-                      </td>
-                      <td className="p-3 font-bold text-slate-900">{item.tema || "-"}</td>
-                      <td className="p-3 font-medium text-slate-700">{item.pemateri || "-"}</td>
-                      <td className="p-3 text-slate-600">{item.tempat || "-"}</td>
-                      <td className="p-3 text-center space-x-2 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setEditingItem(item)}
-                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(item.id_kajian || "")}
-                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition"
-                        >
-                          Hapus
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  kajianList.map((item, idx) => {
+                    const fotoCount = parsePreviewPhotos(item.foto_url).length;
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50 transition">
+                        <td className="p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                          {item.id_kajian || "-"}
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-medium text-slate-800">
+                          {item.tanggal ? String(item.tanggal).split("T")[0] : "-"} <br />
+                          <span className="text-[10px] text-slate-500">{item.waktu || "-"}</span>
+                        </td>
+                        <td className="p-3 font-bold text-slate-900">{item.tema || "-"}</td>
+                        <td className="p-3 font-medium text-slate-700">{item.pemateri || "-"}</td>
+                        <td className="p-3 text-slate-600">{item.tempat || "-"}</td>
+                        <td className="p-3 whitespace-nowrap">
+                          {fotoCount > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              {fotoCount} Foto
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">-</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center space-x-2 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingItem({
+                                ...item,
+                                foto_url: item.foto_url
+                                  ? normalizeMultiFotoInput(item.foto_url)
+                                  : "",
+                              })
+                            }
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(item.id_kajian || "")}
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition"
+                          >
+                            Hapus
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                    <td colSpan={7} className="p-8 text-center text-slate-400">
                       Belum ada jadwal kajian yang tercatat.
                     </td>
                   </tr>
@@ -357,8 +480,8 @@ export default function KajianAdminPage() {
 
       {/* MODAL EDIT KAJIAN */}
       {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 text-slate-800 my-auto">
             <h3 className="text-lg font-bold text-[#0b1c30] mb-1">Edit Jadwal Kajian</h3>
             <p className="text-xs text-slate-500 mb-4 font-mono">ID: {editingItem.id_kajian}</p>
 
@@ -419,6 +542,48 @@ export default function KajianAdminPage() {
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Link Foto Dokumentasi Google Drive (Bisa &gt; 1 Foto)
+                </label>
+                <textarea
+                  rows={2}
+                  value={editingItem.foto_url || ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, foto_url: e.target.value })}
+                  onBlur={() =>
+                    setEditingItem((prev) =>
+                      prev
+                        ? { ...prev, foto_url: normalizeMultiFotoInput(prev.foto_url || "") }
+                        : null
+                    )
+                  }
+                  placeholder="Tempel link foto Google Drive (pisah Enter atau koma)"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                />
+              </div>
+
+              {editPreviewPhotos.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                  <p className="text-[11px] font-bold text-slate-600">
+                    Pratinjau Foto ({editPreviewPhotos.length}):
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {editPreviewPhotos.map((url, idx) => (
+                      <div
+                        key={`${url}-${idx}`}
+                        className="h-16 rounded-lg bg-white border border-slate-200 overflow-hidden"
+                      >
+                        <img
+                          src={url}
+                          alt={`Edit pratinjau ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                 <button
