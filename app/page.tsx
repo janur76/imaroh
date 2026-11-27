@@ -406,34 +406,16 @@ export default function PublicPortal() {
           </div>
         </div>
 
-        {/* Rangkaian Blok Konten Terpisah Berwarna Lembut */}
-        <div className="space-y-8 sm:space-y-10">
-          {/* 01 · KEGIATAN */}
-          <div className="rounded-3xl bg-white/95 p-5 sm:p-8 shadow-sm space-y-3">
-            <span className="inline-block text-[10px] font-extrabold tracking-widest uppercase text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
-              01 · KEGIATAN
-            </span>
-            <BaitulMumininNewsSection />
-          </div>
+        {/* Section Baitul Mu'minin News */}
+        <BaitulMumininNewsSection />
 
-          {/* 02 · PHBI */}
-          <div className="rounded-3xl bg-emerald-50/80 p-5 sm:p-8 space-y-3">
-            <span className="inline-block text-[10px] font-extrabold tracking-widest uppercase text-emerald-800 bg-white/80 px-2.5 py-1 rounded-full">
-              02 · PHBI
-            </span>
-            <PhbiSection />
-          </div>
+        {/* Section PHBI Terdekat (Isra Mi'raj 1448 H) */}
+        <PhbiSection />
 
-          {/* 03 · SYIAR */}
-          <div className="rounded-3xl bg-[#eef7f2]/90 p-5 sm:p-8 space-y-3">
-            <span className="inline-block text-[10px] font-extrabold tracking-widest uppercase text-teal-800 bg-white/80 px-2.5 py-1 rounded-full">
-              03 · SYIAR
-            </span>
-            <SyiarMasjidSection
-              namaMasjid={profil.nama_masjid || "Masjid Baitul Mu'minin"}
-            />
-          </div>
-        </div>
+        {/* Section Syiar & Informasi Masjid */}
+        <SyiarMasjidSection
+          namaMasjid={profil.nama_masjid || "Masjid Baitul Mu'minin"}
+        />
       </div>
 
       {/* Footer Publik */}
