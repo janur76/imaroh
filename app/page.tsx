@@ -406,6 +406,9 @@ export default function PublicPortal() {
           </div>
         </div>
 
+        {/* Section Baitul Mu'minin News */}
+        <BaitulMumininNewsSection />
+
         {/* Section PHBI Terdekat (Isra Mi'raj 1448 H) */}
         <PhbiSection />
 
