@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, useCallback, FormEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
@@ -15,10 +15,10 @@ type BeritaItem = {
   tanggal_update: string;
 };
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabase =
+  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 const STATUS_OPTIONS = ["Sedang Berjalan", "Tahap Penyelesaian", "Selesai"];
 
@@ -33,6 +33,14 @@ const emptyForm = {
   tampil_publik: true,
 };
 
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return "Terjadi kesalahan";
+}
+
 export default function AdminKegiatanPage() {
   const [list, setList] = useState<BeritaItem[]>([]);
   const [form, setForm] = useState(emptyForm);
@@ -40,10 +48,19 @@ export default function AdminKegiatanPage() {
   const [saving, setSaving] = useState(false);
   const [pesan, setPesan] = useState<{ tipe: "ok" | "err"; teks: string } | null>(null);
 
-  async function fetchAll() {
+  const fetchAll = useCallback(async () => {
+    if (!supabase) {
+      setPesan({
+        tipe: "err",
+        teks: "Konfigurasi NEXT_PUBLIC_SUPABASE_URL atau NEXT_PUBLIC_SUPABASE_ANON_KEY belum terpasang.",
+      });
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const { data, error } = await supabase
-      .from("berita_kegiatan")
+      .from("imaroh_berita_kegiatan")
       .select("id, judul, status, ringkasan, foto_url, petugas, tampil_publik, tanggal_update")
       .order("tanggal_update", { ascending: false })
       .order("created_at", { ascending: false });
@@ -54,11 +71,11 @@ export default function AdminKegiatanPage() {
       setList(data || []);
     }
     setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     fetchAll();
-  }, []);
+  }, [fetchAll]);
 
   function mulaiEdit(item: BeritaItem) {
     setPesan(null);
@@ -84,6 +101,11 @@ export default function AdminKegiatanPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!supabase) {
+      setPesan({ tipe: "err", teks: "Koneksi Supabase belum terkonfigurasi." });
+      return;
+    }
+
     if (!form.judul.trim() || !form.ringkasan.trim()) {
       setPesan({ tipe: "err", teks: "Judul dan ringkasan kegiatan wajib diisi." });
       return;
@@ -106,46 +128,51 @@ export default function AdminKegiatanPage() {
     try {
       if (form.id) {
         const { error } = await supabase
-          .from("berita_kegiatan")
+          .from("imaroh_berita_kegiatan")
           .update(payload)
           .eq("id", form.id);
         if (error) throw error;
         setPesan({ tipe: "ok", teks: "Kabar kegiatan berhasil diperbarui." });
       } else {
-        const { error } = await supabase.from("berita_kegiatan").insert([payload]);
+        const { error } = await supabase.from("imaroh_berita_kegiatan").insert([payload]);
         if (error) throw error;
         setPesan({ tipe: "ok", teks: "Kabar kegiatan baru berhasil disimpan." });
       }
 
       resetForm();
       await fetchAll();
-    } catch (err: any) {
-      setPesan({ tipe: "err", teks: "Gagal menyimpan: " + (err?.message || "Terjadi kesalahan") });
+    } catch (err) {
+      setPesan({ tipe: "err", teks: "Gagal menyimpan: " + getErrorMessage(err) });
     } finally {
       setSaving(false);
     }
   }
 
   async function togglePublik(item: BeritaItem) {
+    if (!supabase) return;
     const { error } = await supabase
-      .from("berita_kegiatan")
+      .from("imaroh_berita_kegiatan")
       .update({ tampil_publik: !item.tampil_publik, updated_at: new Date().toISOString() })
       .eq("id", item.id);
 
-    if (!error) {
-      setList((prev) =>
-        prev.map((row) =>
-          row.id === item.id ? { ...row, tampil_publik: !row.tampil_publik } : row
-        )
-      );
+    if (error) {
+      setPesan({ tipe: "err", teks: "Gagal mengubah status tayang: " + error.message });
+      return;
     }
+
+    setList((prev) =>
+      prev.map((row) =>
+        row.id === item.id ? { ...row, tampil_publik: !row.tampil_publik } : row
+      )
+    );
   }
 
   async function handleHapus(id: string, judul: string) {
+    if (!supabase) return;
     const yakin = window.confirm(`Hapus kabar kegiatan "${judul}"?`);
     if (!yakin) return;
 
-    const { error } = await supabase.from("berita_kegiatan").delete().eq("id", id);
+    const { error } = await supabase.from("imaroh_berita_kegiatan").delete().eq("id", id);
     if (error) {
       setPesan({ tipe: "err", teks: "Gagal menghapus: " + error.message });
     } else {
