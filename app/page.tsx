@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
 import SyiarMasjidSection from "@/components/SyiarMasjidSection";
 import PhbiSection from "@/components/home/PhbiSection";
+import BaitulMumininNewsSection from "@/components/BaitulMumininNewsSection";
 
 type FilterMutasi = "semua" | "masuk" | "keluar" | "qris" | "phbi";
 
