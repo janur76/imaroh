@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { fetchImarohData } from "@/lib/api";
-import SyiarMasjidSection from "@/components/SyiarMasjidSection";
+import SyiarMasjidSection, { SyiarItem } from "@/components/SyiarMasjidSection";
 import PhbiSection from "@/components/home/PhbiSection";
 import BaitulMumininNewsSection from "@/components/BaitulMumininNewsSection";
 
@@ -41,6 +41,25 @@ function resolveHeaderDanAlamat(rawNama?: string, rawAlamat?: string) {
     lokasi: "",
     alamatLengkap: "Perum Citra Mandiri Regency, Sidoarjo",
   };
+}
+
+function parseKajianFotoList(kajianList: any[]): string[] {
+  if (!Array.isArray(kajianList) || kajianList.length === 0) return [];
+  const collected: string[] = [];
+
+  kajianList.forEach((item) => {
+    const raw = String(item?.foto_url || item?.foto || item?.dokumentasi_url || "").trim();
+    if (!raw) return;
+    raw
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach((url) => {
+        if (!collected.includes(url)) collected.push(url);
+      });
+  });
+
+  return collected;
 }
 
 export default function PublicPortal() {
@@ -107,6 +126,31 @@ export default function PublicPortal() {
     lokasi: lokasiMasjidHeader,
     alamatLengkap: alamatMasjidLengkap,
   } = resolveHeaderDanAlamat(profil.nama_masjid, profil.alamat);
+
+  const syiarItemsWithPhotos = useMemo<SyiarItem[]>(() => {
+    const fotoKajian = parseKajianFotoList(kajianList);
+    return [
+      {
+        id: "kajian-rutin",
+        badge: "Kajian Rutin",
+        judul: "Kajian Rutin Kitab Nashoihud Diniyah",
+        ringkasan:
+          "Setiap hari Sabtu ba'da Subuh (04.30 – Syuruq) bersama Ust. Habib Al Amin, S.Th.I.M.Sy di Masjid Baitul Mu'minin.",
+        posterUrl: "/kajian-rutin.jpg",
+        href: "/syiar/kajian-rutin",
+        galeriFoto: fotoKajian,
+      },
+      {
+        id: "tabungan-qurban",
+        badge: "Syiar Qurban",
+        judul: "Ayoo Menabung Qurban Baitul Mu'minin",
+        ringkasan:
+          "Program tabungan & angsuran Qurban Paket Sapi dan Kambing untuk persiapan ibadah Qurban lebih awal dan terencana.",
+        posterUrl: "/tabungan-qurban.jpg",
+        href: "/syiar/tabungan-qurban",
+      },
+    ];
+  }, [kajianList]);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f0fdf4] via-[#f8f9ff] to-[#f0fdf4] text-[#0b1c30]">
@@ -414,6 +458,7 @@ export default function PublicPortal() {
 
         {/* Section Syiar & Informasi Masjid */}
         <SyiarMasjidSection
+          items={syiarItemsWithPhotos}
           namaMasjid={profil.nama_masjid || "Masjid Baitul Mu'minin"}
         />
       </div>
