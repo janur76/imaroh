@@ -266,7 +266,7 @@ export default function PublicPortal() {
                 {loading ? "Memuat..." : `Rp ${saldoBersih.toLocaleString("id-ID")}`}
               </h3>
               <div className="mt-3 pt-3 border-t border-white/10 flex justify-between gap-2 text-xs">
-                <span className="text-sky-200 font-semibold">
+                <span className="text-[#7dd3fc] font-semibold">
                   Masuk: Rp {totalMasuk.toLocaleString("id-ID")}
                 </span>
                 <span className="text-[#ff5e36] font-semibold">
