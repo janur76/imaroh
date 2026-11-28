@@ -269,7 +269,7 @@ export default function PublicPortal() {
                 <span className="text-sky-200 font-semibold">
                   Masuk: Rp {totalMasuk.toLocaleString("id-ID")}
                 </span>
-                <span className="text-amber-300 font-semibold">
+                <span className="text-[#ff7a45] font-semibold">
                   Keluar: Rp {totalKeluar.toLocaleString("id-ID")}
                 </span>
               </div>
