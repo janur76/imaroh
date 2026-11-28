@@ -17,6 +17,7 @@ interface KajianRecord {
   pemateri?: string;
   tempat?: string;
   foto_url?: string;
+  deskripsi?: string;
   [key: string]: any;
 }
 
@@ -115,6 +116,16 @@ function parseKajianFotoList(kajianList: KajianRecord[]): string[] {
   });
 
   return collected;
+}
+
+function getDeskripsiKajian(item: KajianRecord, namaMasjid: string): string {
+  const isiDeskripsi = String(item.deskripsi || "").trim();
+  if (isiDeskripsi) return isiDeskripsi;
+
+  const tema = String(item.tema || "Kajian Rutin").trim();
+  const pemateri = String(item.pemateri || "Ustadz").trim();
+  const tempat = String(item.tempat || namaMasjid).trim();
+  return `Sesi kajian "${tema}" bersama ${pemateri} di ${tempat} yang membahas materi utama kajian serta hikmah penerapannya bagi jamaah.`;
 }
 
 export default function PublicPortal() {
@@ -656,6 +667,15 @@ export default function PublicPortal() {
                   {selectedKajian.tempat || "Masjid Baitul Mu'minin"}
                 </span>
               </div>
+            </div>
+
+            <div className="rounded-2xl bg-emerald-50/60 border border-emerald-100 p-4 space-y-1.5">
+              <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800">
+                Penjelasan Singkat Isi Kajian
+              </h4>
+              <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-line">
+                {getDeskripsiKajian(selectedKajian, namaMasjidHeader)}
+              </p>
             </div>
 
             <div className="space-y-2.5">
