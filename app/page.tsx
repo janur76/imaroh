@@ -254,7 +254,7 @@ export default function PublicPortal() {
               </h2>
               <p className="text-sm text-emerald-100/90 max-w-xl">
                 Seluruh catatan infak, donasi jamaah, dan alokasi belanja operasional dikelola secara
-                transparan dan dapat dipantau langsung oleh masyarakat secara *real-time*.
+                transparan dan dapat dipantau langsung oleh masyarakat secara real-time.
               </p>
             </div>
 
@@ -265,9 +265,13 @@ export default function PublicPortal() {
               <h3 className="text-3xl md:text-4xl font-black mt-2 text-white">
                 {loading ? "Memuat..." : `Rp ${saldoBersih.toLocaleString("id-ID")}`}
               </h3>
-              <div className="mt-3 pt-3 border-t border-white/10 flex justify-between text-xs text-emerald-100">
-                <span>Masuk: Rp {totalMasuk.toLocaleString("id-ID")}</span>
-                <span>Keluar: Rp {totalKeluar.toLocaleString("id-ID")}</span>
+              <div className="mt-3 pt-3 border-t border-white/10 flex justify-between gap-2 text-xs">
+                <span className="text-sky-200 font-semibold">
+                  Masuk: Rp {totalMasuk.toLocaleString("id-ID")}
+                </span>
+                <span className="text-amber-300 font-semibold">
+                  Keluar: Rp {totalKeluar.toLocaleString("id-ID")}
+                </span>
               </div>
             </div>
           </div>
