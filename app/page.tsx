@@ -9,6 +9,17 @@ import BaitulMumininNewsSection from "@/components/BaitulMumininNewsSection";
 
 type FilterMutasi = "semua" | "masuk" | "keluar" | "qris" | "phbi";
 
+interface KajianRecord {
+  id_kajian?: string;
+  tanggal?: string;
+  waktu?: string;
+  tema?: string;
+  pemateri?: string;
+  tempat?: string;
+  foto_url?: string;
+  [key: string]: any;
+}
+
 function resolveHeaderDanAlamat(rawNama?: string, rawAlamat?: string) {
   const cleanNama = String(rawNama || "Masjid Baitul Mu'minin").trim();
   const cleanAlamat = String(rawAlamat || "").trim();
@@ -43,20 +54,64 @@ function resolveHeaderDanAlamat(rawNama?: string, rawAlamat?: string) {
   };
 }
 
-function parseKajianFotoList(kajianList: any[]): string[] {
+function extractDriveFileId(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  const filePathMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (filePathMatch?.[1]) return filePathMatch[1];
+
+  const dPathMatch = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (dPathMatch?.[1] && trimmed.includes("drive.google.com")) return dPathMatch[1];
+
+  const idParamMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (
+    idParamMatch?.[1] &&
+    (trimmed.includes("drive.google.com") || trimmed.includes("googleusercontent.com"))
+  ) {
+    return idParamMatch[1];
+  }
+
+  const lhMatch = trimmed.match(/lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+  if (lhMatch?.[1]) return lhMatch[1];
+
+  return null;
+}
+
+function buildPhotoCandidates(rawUrl: string): string[] {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return [];
+
+  const fileId = extractDriveFileId(trimmed);
+  if (!fileId) {
+    return [trimmed];
+  }
+
+  const primary = `https://lh3.googleusercontent.com/d/${fileId}`;
+  const thumb = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
+  const ucView = `https://drive.google.com/uc?export=view&id=${fileId}`;
+
+  return Array.from(new Set([primary, thumb, ucView, trimmed]));
+}
+
+function splitRawFotoUrls(item?: KajianRecord): string[] {
+  if (!item) return [];
+  const raw = String(item?.foto_url || item?.foto || item?.dokumentasi_url || "").trim();
+  if (!raw) return [];
+  return raw
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function parseKajianFotoList(kajianList: KajianRecord[]): string[] {
   if (!Array.isArray(kajianList) || kajianList.length === 0) return [];
   const collected: string[] = [];
 
   kajianList.forEach((item) => {
-    const raw = String(item?.foto_url || item?.foto || item?.dokumentasi_url || "").trim();
-    if (!raw) return;
-    raw
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .forEach((url) => {
-        if (!collected.includes(url)) collected.push(url);
-      });
+    splitRawFotoUrls(item).forEach((url) => {
+      if (!collected.includes(url)) collected.push(url);
+    });
   });
 
   return collected;
@@ -67,9 +122,14 @@ export default function PublicPortal() {
   const [profil, setProfil] = useState<any>({});
   const [kasList, setKasList] = useState<any[]>([]);
   const [inventarisList, setInventarisList] = useState<any[]>([]);
-  const [kajianList, setKajianList] = useState<any[]>([]);
+  const [kajianList, setKajianList] = useState<KajianRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterMutasi, setFilterMutasi] = useState<FilterMutasi>("semua");
+
+  // Modal Detail Agenda Kajian & Lightbox Foto
+  const [selectedKajian, setSelectedKajian] = useState<KajianRecord | null>(null);
+  const [zoomedPhoto, setZoomedPhoto] = useState<{ url: string; judul: string } | null>(null);
+  const [photoFallbackIdx, setPhotoFallbackIdx] = useState<Record<string, number>>({});
 
   const loadPublicData = async () => {
     try {
@@ -151,6 +211,34 @@ export default function PublicPortal() {
       },
     ];
   }, [kajianList]);
+
+  const handleKajianPhotoError = (key: string, totalCandidates: number) => {
+    setPhotoFallbackIdx((prev) => {
+      const next = (prev[key] ?? 0) + 1;
+      if (next > totalCandidates) return prev;
+      return { ...prev, [key]: next };
+    });
+  };
+
+  const selectedKajianPhotos = useMemo(() => {
+    if (!selectedKajian) return [];
+    const rawUrls = splitRawFotoUrls(selectedKajian);
+    const baseKey = selectedKajian.id_kajian || selectedKajian.tema || "kajian";
+
+    return rawUrls
+      .map((rawUrl, idx) => {
+        const candidates = buildPhotoCandidates(rawUrl);
+        const key = `${baseKey}-${idx}`;
+        const currentIdx = photoFallbackIdx[key] ?? 0;
+        if (currentIdx >= candidates.length) return null;
+        return {
+          key,
+          url: candidates[currentIdx],
+          totalCandidates: candidates.length,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  }, [selectedKajian, photoFallbackIdx]);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f0fdf4] via-[#f8f9ff] to-[#f0fdf4] text-[#0b1c30]">
@@ -269,7 +357,7 @@ export default function PublicPortal() {
                 <span className="text-[#7dd3fc] font-semibold">
                   Masuk: Rp {totalMasuk.toLocaleString("id-ID")}
                 </span>
-                <span className="text-[#ff5e36] font-semibold">
+                <span className="text-[#ff7a45] font-semibold">
                   Keluar: Rp {totalKeluar.toLocaleString("id-ID")}
                 </span>
               </div>
@@ -422,30 +510,72 @@ export default function PublicPortal() {
             </div>
 
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
-              <h3 className="font-extrabold text-base text-[#0b1c30] flex items-center gap-2">
-                <span>📅</span> Agenda &amp; Jadwal Kajian
-              </h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-extrabold text-base text-[#0b1c30] flex items-center gap-2">
+                  <span>📅</span> Agenda &amp; Jadwal Kajian
+                </h3>
+                {kajianList.length > 0 && (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                    {kajianList.length} Agenda
+                  </span>
+                )}
+              </div>
+
               <div className="space-y-3">
                 {loading ? (
                   <p className="text-xs text-slate-400 text-center py-4">Memuat jadwal kajian...</p>
                 ) : kajianList.length > 0 ? (
-                  kajianList.slice(0, 3).map((kajian, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-1.5"
-                    >
-                      <span className="text-[10px] font-bold text-[#047857] uppercase bg-emerald-100/60 px-2.5 py-0.5 rounded-md">
-                        {kajian.tanggal || "Segera"} • {kajian.waktu || "Ba'da Isya"}
-                      </span>
-                      <h4 className="font-bold text-xs text-slate-900 mt-1">
-                        {kajian.tema || "Kajian Rutin"}
-                      </h4>
-                      <p className="text-[11px] text-slate-600">
-                        Pemateri:{" "}
-                        <span className="font-semibold">{kajian.pemateri || "Ustadz"}</span>
-                      </p>
-                    </div>
-                  ))
+                  kajianList.slice(0, 4).map((kajian, idx) => {
+                    const fotoCount = splitRawFotoUrls(kajian).length;
+                    const tglStr = kajian.tanggal ? String(kajian.tanggal).split("T")[0] : "Segera";
+
+                    return (
+                      <div
+                        key={kajian.id_kajian || idx}
+                        className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-2"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                          <span className="text-[10px] font-bold text-[#047857] uppercase bg-emerald-100/70 px-2.5 py-0.5 rounded-md">
+                            {tglStr} • {kajian.waktu || "Ba'da Isya"}
+                          </span>
+                          {fotoCount > 0 && (
+                            <span className="text-[10px] font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-full border border-emerald-200">
+                              {fotoCount} Foto
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className="font-bold text-xs text-slate-900 leading-snug">
+                          {kajian.tema || "Kajian Rutin"}
+                        </h4>
+
+                        <p className="text-[11px] text-slate-600">
+                          Pemateri:{" "}
+                          <span className="font-semibold">{kajian.pemateri || "Ustadz"}</span>
+                        </p>
+
+                        {kajian.tempat && (
+                          <p className="text-[11px] text-slate-500">
+                            Tempat: {kajian.tempat}
+                          </p>
+                        )}
+
+                        <div className="pt-1 flex items-center justify-between border-t border-emerald-100/80">
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {kajian.id_kajian || ""}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKajian(kajian)}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#047857] hover:bg-emerald-700 text-white text-[11px] font-semibold transition"
+                          >
+                            <span>Lihat Detail</span>
+                            <span aria-hidden="true">→</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
                 ) : (
                   <p className="text-xs text-slate-400 text-center py-4">Belum ada jadwal kajian.</p>
                 )}
@@ -466,6 +596,155 @@ export default function PublicPortal() {
           namaMasjid={profil.nama_masjid || "Masjid Baitul Mu'minin"}
         />
       </div>
+
+      {/* Modal Detail Agenda & Dokumentasi Foto Kajian */}
+      {selectedKajian && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setSelectedKajian(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3.5">
+              <div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    {selectedKajian.tanggal
+                      ? String(selectedKajian.tanggal).split("T")[0]
+                      : "Agenda Kajian"}
+                  </span>
+                  {selectedKajian.waktu && (
+                    <span className="inline-block text-[10px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                      {selectedKajian.waktu}
+                    </span>
+                  )}
+                  {selectedKajian.id_kajian && (
+                    <span className="font-mono text-[10px] font-bold text-slate-400">
+                      {selectedKajian.id_kajian}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-lg font-extrabold text-[#0b1c30] mt-2">
+                  {selectedKajian.tema || "Kajian Rutin"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedKajian(null)}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 shrink-0"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl bg-slate-50 border border-slate-200/80 p-3.5 text-xs">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                  Pemateri / Ustadz
+                </span>
+                <span className="font-bold text-slate-800">
+                  {selectedKajian.pemateri || "Ustadz"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                  Tempat Pelaksanaan
+                </span>
+                <span className="font-semibold text-slate-800">
+                  {selectedKajian.tempat || "Masjid Baitul Mu'minin"}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-700">
+                  Dokumentasi Kegiatan ({selectedKajianPhotos.length} Foto)
+                </h4>
+                {selectedKajianPhotos.length > 0 && (
+                  <span className="text-[11px] text-slate-400">
+                    Klik foto untuk memperbesar
+                  </span>
+                )}
+              </div>
+
+              {selectedKajianPhotos.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {selectedKajianPhotos.map((photo, idx) => (
+                    <button
+                      key={photo.key}
+                      type="button"
+                      onClick={() =>
+                        setZoomedPhoto({
+                          url: photo.url,
+                          judul: `${selectedKajian.tema || "Dokumentasi Kajian"} - Foto ${idx + 1}`,
+                        })
+                      }
+                      className="h-32 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden block text-left group/img"
+                    >
+                      <img
+                        src={photo.url}
+                        alt={`${selectedKajian.tema || "Kajian"} - dokumentasi ${idx + 1}`}
+                        className="w-full h-full object-cover group-hover/img:scale-[1.03] transition"
+                        onError={() => handleKajianPhotoError(photo.key, photo.totalCandidates)}
+                      />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-slate-50 border border-slate-200/80 p-5 text-center text-xs text-slate-500">
+                  Belum ada foto dokumentasi kegiatan yang dilampirkan untuk agenda ini.
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setSelectedKajian(null)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition"
+              >
+                Selesai
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Foto Dokumentasi */}
+      {zoomedPhoto && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setZoomedPhoto(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-2xl w-full p-5 shadow-2xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-extrabold text-slate-900 truncate">
+                {zoomedPhoto.judul}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setZoomedPhoto(null)}
+                className="px-3 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+            <div className="rounded-2xl bg-slate-100 overflow-hidden max-h-[70vh] flex items-center justify-center">
+              <img
+                src={zoomedPhoto.url}
+                alt={zoomedPhoto.judul}
+                className="max-w-full max-h-[70vh] object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer Publik */}
       <footer className="mt-16 border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
